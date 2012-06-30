@@ -195,4 +195,9 @@
   
   <!-- Automatically injects a env map into the env function -->
   <bean id="enviromentInjector" class="org.geoserver.ows.EnviromentInjectionCallback"/>
+
+  <!-- default style handlers -->
+  <bean id="sldHandler-1.0" class="org.geoserver.catalog.SLD10Handler"/>
+  <bean id="sldHandler-1.1" class="org.geoserver.catalog.SLD11Handler"/>
+  
 </beans>

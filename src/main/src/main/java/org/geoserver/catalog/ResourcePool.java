@@ -1297,7 +1297,7 @@ public class ResourcePool {
                         throw new IOException( "No such file: " + info.getFilename());
                     }
                     
-                    style = Styles.style(Styles.parse(styleFile, info.getSLDVersion()));
+                    Styles.parse(styleFile, info.getFormat(), info.getFormatVersion());
                     
                     //set the name of the style to be the name of hte style metadata
                     // remove this when wms works off style info
@@ -1359,7 +1359,8 @@ public class ResourcePool {
             BufferedOutputStream out = new BufferedOutputStream( new FileOutputStream( styleFile ) );
             
             try {
-                Styles.encode(Styles.sld(style), info.getSLDVersion(), format, out);
+                Styles.encode(Styles.sld(style), info.getFormat(), info.getFormatVersion(), 
+                    format, out);
                 clear(info);
             }
             finally {

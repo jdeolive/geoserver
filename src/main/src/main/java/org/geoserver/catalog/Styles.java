@@ -14,12 +14,14 @@ import java.io.OutputStream;
 import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.logging.Logger;
 
 import javax.xml.transform.TransformerException;
 
 import org.geoserver.ows.util.RequestUtils;
+import org.geoserver.platform.GeoServerExtensions;
 import org.geotools.factory.CommonFactoryFinder;
 import org.geotools.sld.v1_1.SLDConfiguration;
 import org.geotools.styling.NamedLayer;
@@ -65,15 +67,16 @@ public class Styles {
      * from the content itself.
      *  
      * @param input a File, Reader, or InputStream object.
+     * @param format The style language
      * 
      * @return The parsed style.
      * 
      * @throws IOException Any parsing errors that occur.
      * @throws IllegalArgumentException If the type of the style can not be determined.
      */
-    public static StyledLayerDescriptor parse(Object input) throws IOException {
+    public static StyledLayerDescriptor parse(Object input, String format) throws IOException {
         Object[] obj = getVersionAndReader(input);
-        return parse(obj[1], (Version)obj[0]);
+        return parse(obj[1], format, (Version)obj[0]);
     }
 
     /**
@@ -81,17 +84,18 @@ public class Styles {
      * <p>
      * </p>
      * @param input a File, Reader, or InputStream object.
-     * @param version The SLD version
+     * @param format The style format
+     * @param version The style format version
      * 
      * @return The parsed StyleLayerDescriptor.
      * 
      * @throws IOException Any parsing errors that occur.
      * @throws IllegalArgumentException If the specified version is not supported.
      */
-    public static StyledLayerDescriptor parse(Object input, Version version) throws IOException {
-        return Handler.lookup(version).parse(input);
+    public static StyledLayerDescriptor parse(Object input, String format, Version version) throws IOException {
+        return lookupHandler(format, version).parse(input);
     }
-    
+
     /**
      * Encodes a StyledLayerDescriptor object to a style document.
      * <p>
@@ -104,10 +108,10 @@ public class Styles {
      * @throws IOException Any encoding errors that occur.
      * @throws IllegalArgumentException If the specified version is not supported.
      */
-    public static void encode(StyledLayerDescriptor sld, Version version, boolean format, 
+    public static void encode(StyledLayerDescriptor sld, String format, Version version, boolean pretty, 
             OutputStream output) throws IOException {
-        
-        Handler.lookup(version).encode(sld, format, output);
+
+        lookupHandler(format, version).encode(sld, pretty, output);
     }
     
     /**
@@ -115,23 +119,24 @@ public class Styles {
      * itself. 
      * 
      * @param input A File, Reader, or InputStream object.
-     * 
+     * @para format Style language
      * @return A list of validation exceptions, empty if no errors are present and the document is
      *   valid.
      * 
      * @throws IOException Any parsing errors that occur.
      * @throws IllegalArgumentException If the specified version is not supported.
      */
-    public static List<Exception> validate(Object input) throws IOException {
+    public static List<Exception> validate(Object input, String format) throws IOException {
         Object[] obj = getVersionAndReader(input);
-        return validate(obj[1], (Version)obj[0]);
+        return validate(obj[1], format, (Version)obj[0]);
     }
 
     /**
      * Performs schema validation on an style document, specifying the version.
      * 
      * @param input A File, Reader, or InputStream object.
-     * @param version The SLD version
+     * @param language The style language
+     * @param version The style version
      * 
      * @return A list of validation exceptions, empty if no errors are present and the document is
      *   valid.
@@ -139,8 +144,8 @@ public class Styles {
      * @throws IOException Any parsing errors that occur.
      * @throws IllegalArgumentException If the specified version is not supported.
      */
-    public static List<Exception> validate(Object input, Version version) throws IOException {
-        return Handler.lookup(version).validate(input);
+    public static List<Exception> validate(Object input, String language, Version version) throws IOException {
+        return lookupHandler(language, version).validate(input);
     }
 
     /**
@@ -203,6 +208,44 @@ public class Styles {
         Object[] versionAndReader = getVersionAndReader(input);
         return (Version) versionAndReader[0];
     }
+
+    public static StyleHandler lookupHandler(String format, Version version) {
+        if (format == null) {
+            throw new IllegalArgumentException("Style format must not be null");
+        }
+
+        List<StyleHandler> matches = new ArrayList();
+        for (StyleHandler h : GeoServerExtensions.extensions(StyleHandler.class)) {
+            if (format.equalsIgnoreCase(h.getFormat())) {
+                if (version != null && version.equals(h.getVersion())) {
+                    //exact match
+                    return h;
+                }
+                matches.add(h);
+            }
+        }
+
+        if (matches.isEmpty()) {
+            throw new RuntimeException(
+                "No such style handler: format = " + format + ", version = " + version);
+        }
+
+        if (matches.size() == 1) {
+            return matches.get(0);
+        }
+
+        //sort, and return lowest version
+        //TODO: actually do version negotiation, match the closest version and only return lowest
+        // when version is actually null
+        Collections.sort(matches, new Comparator<StyleHandler>() {
+            @Override
+            public int compare(StyleHandler o1, StyleHandler o2) {
+                return o1.getVersion().compareTo(o2.getVersion());
+            }
+        });
+        return matches.get(0);
+    }
+
     /**
      * Helper method for finding which style handler/version to use from the actual content.
      */
@@ -273,119 +316,119 @@ public class Styles {
         throw new IllegalArgumentException("Unable to turn " + input + " into reader");
     }
     
-    public static enum Handler {
-        SLD_10("1.0.0") {
-            
-            @Override
-            public StyledLayerDescriptor parse(Object input) throws IOException {
-                SLDParser p = parser(input);
-                StyledLayerDescriptor sld = p.parseSLD();
-                if (sld.getStyledLayers().length == 0) {
-                    //most likely a style that is not a valid sld, try to actually parse out a 
-                    // style and then wrap it in an sld
-                    Style[] style = p.readDOM();
-                    if (style.length > 0) {
-                        NamedLayer l = styleFactory.createNamedLayer();
-                        l.addStyle(style[0]);
-                        sld.addStyledLayer(l);
-                    }
-                }
-                
-                return sld;
-            }
-            
-            @Override
-            protected List<Exception> validate(Object input) throws IOException {
-                return new SLDValidator().validateSLD(new InputSource(toReader(input)));
-            }
-            
-            @Override
-            public void encode(StyledLayerDescriptor sld, boolean format, OutputStream output) throws IOException {
-                SLDTransformer tx = new SLDTransformer();
-                if (format) {
-                    tx.setIndentation(2);
-                }
-                try {
-                    tx.transform( sld, output );
-                } 
-                catch (TransformerException e) {
-                    throw (IOException) new IOException("Error writing style").initCause(e);
-                }
-            }
-            
-            
-            SLDParser parser(Object input) throws IOException {
-                if (input instanceof File) {
-                    return new SLDParser(styleFactory, (File) input);
-                }
-                else {
-                    return new SLDParser(styleFactory, toReader(input));
-                }
-            }
-        },
-        
-        SLD_11("1.1.0") {
-            
-            @Override
-            public StyledLayerDescriptor parse(Object input) throws IOException {
-                SLDConfiguration sld = new SLDConfiguration();
-                try {
-                    return (StyledLayerDescriptor) new Parser(sld).parse(toReader(input));
-                } 
-                catch(Exception e) {
-                    if (e instanceof IOException) throw (IOException) e;
-                    throw (IOException) new IOException().initCause(e);
-                }
-            }
-            
-            @Override
-            protected List<Exception> validate(Object input) throws IOException {
-                SLDConfiguration sld = new SLDConfiguration();
-                Parser p = new Parser(sld);
-                p.setValidating(true);
-                
-                try {
-                    p.parse(toReader(input));
-                    return p.getValidationErrors();
-                } 
-                catch(Exception e) {
-                    e.printStackTrace();
-                    List validationErrors = new ArrayList<Exception>(p.getValidationErrors());
-                    validationErrors.add(0, e);
-                    return validationErrors;
-                }
-            }
-
-            @Override
-            public void encode(StyledLayerDescriptor sld, boolean format, OutputStream output) throws IOException {
-                // TODO Auto-generated method stub
-            }  
-        };
-        
-        private Version version;
-        
-        private Handler(String version) {
-            this.version = new org.geotools.util.Version(version);
-        }
-        
-        public Version getVersion() {
-            return version;
-        }
-
-        protected abstract StyledLayerDescriptor parse(Object input) throws IOException;
-        
-        protected abstract void encode(StyledLayerDescriptor sld, boolean format, OutputStream output) 
-            throws IOException;
-        
-        protected abstract List<Exception> validate(Object input) throws IOException;
-        
-        public static Handler lookup(Version version) {
-            for (Handler h : values()) {
-                if (h.getVersion().equals(version)) {
-                    return h;
-                }
-            }
-            throw new IllegalArgumentException("No support for SLD " + version);
-        }
-    };
+//    public static enum Handler {
+//        SLD_10("1.0.0") {
+//            
+//            @Override
+//            public StyledLayerDescriptor parse(Object input) throws IOException {
+//                SLDParser p = parser(input);
+//                StyledLayerDescriptor sld = p.parseSLD();
+//                if (sld.getStyledLayers().length == 0) {
+//                    //most likely a style that is not a valid sld, try to actually parse out a 
+//                    // style and then wrap it in an sld
+//                    Style[] style = p.readDOM();
+//                    if (style.length > 0) {
+//                        NamedLayer l = styleFactory.createNamedLayer();
+//                        l.addStyle(style[0]);
+//                        sld.addStyledLayer(l);
+//                    }
+//                }
+//                
+//                return sld;
+//            }
+//            
+//            @Override
+//            protected List<Exception> validate(Object input) throws IOException {
+//                return new SLDValidator().validateSLD(new InputSource(toReader(input)));
+//            }
+//            
+//            @Override
+//            public void encode(StyledLayerDescriptor sld, boolean format, OutputStream output) throws IOException {
+//                SLDTransformer tx = new SLDTransformer();
+//                if (format) {
+//                    tx.setIndentation(2);
+//                }
+//                try {
+//                    tx.transform( sld, output );
+//                } 
+//                catch (TransformerException e) {
+//                    throw (IOException) new IOException("Error writing style").initCause(e);
+//                }
+//            }
+//            
+//            
+//            SLDParser parser(Object input) throws IOException {
+//                if (input instanceof File) {
+//                    return new SLDParser(styleFactory, (File) input);
+//                }
+//                else {
+//                    return new SLDParser(styleFactory, toReader(input));
+//                }
+//            }
+//        },
+//        
+//        SLD_11("1.1.0") {
+//            
+//            @Override
+//            public StyledLayerDescriptor parse(Object input) throws IOException {
+//                SLDConfiguration sld = new SLDConfiguration();
+//                try {
+//                    return (StyledLayerDescriptor) new Parser(sld).parse(toReader(input));
+//                } 
+//                catch(Exception e) {
+//                    if (e instanceof IOException) throw (IOException) e;
+//                    throw (IOException) new IOException().initCause(e);
+//                }
+//            }
+//            
+//            @Override
+//            protected List<Exception> validate(Object input) throws IOException {
+//                SLDConfiguration sld = new SLDConfiguration();
+//                Parser p = new Parser(sld);
+//                p.setValidating(true);
+//                
+//                try {
+//                    p.parse(toReader(input));
+//                    return p.getValidationErrors();
+//                } 
+//                catch(Exception e) {
+//                    e.printStackTrace();
+//                    List validationErrors = new ArrayList<Exception>(p.getValidationErrors());
+//                    validationErrors.add(0, e);
+//                    return validationErrors;
+//                }
+//            }
+//
+//            @Override
+//            public void encode(StyledLayerDescriptor sld, boolean format, OutputStream output) throws IOException {
+//                // TODO Auto-generated method stub
+//            }  
+//        };
+//        
+//        private Version version;
+//        
+//        private Handler(String version) {
+//            this.version = new org.geotools.util.Version(version);
+//        }
+//        
+//        public Version getVersion() {
+//            return version;
+//        }
+//
+//        protected abstract StyledLayerDescriptor parse(Object input) throws IOException;
+//        
+//        protected abstract void encode(StyledLayerDescriptor sld, boolean format, OutputStream output) 
+//            throws IOException;
+//        
+//        protected abstract List<Exception> validate(Object input) throws IOException;
+//        
+//        public static Handler lookup(Version version) {
+//            for (Handler h : values()) {
+//                if (h.getVersion().equals(version)) {
+//                    return h;
+//                }
+//            }
+//            throw new IllegalArgumentException("No support for SLD " + version);
+//        }
+//    };
 }

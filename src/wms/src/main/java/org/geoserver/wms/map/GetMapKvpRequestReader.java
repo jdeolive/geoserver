@@ -28,6 +28,7 @@ import org.geoserver.catalog.LayerGroupInfo;
 import org.geoserver.catalog.LayerInfo;
 import org.geoserver.catalog.MetadataMap;
 import org.geoserver.catalog.ResourceInfo;
+import org.geoserver.catalog.SLDHandler;
 import org.geoserver.catalog.StyleInfo;
 import org.geoserver.catalog.Styles;
 import org.geoserver.catalog.WMSLayerInfo;
@@ -548,11 +549,12 @@ public class GetMapKvpRequestReader extends KvpRequestReader implements HttpServ
      */
     private List validateSld(InputStream stream, GetMapRequest getMap) {
         try {
+            String language = getStyleFormat(getMap); 
             if (getMap.getSldVersion() != null) {
-                return Styles.validate(stream, new Version(getMap.getSldVersion()));
+                return Styles.validate(stream, language, new Version(getMap.getSldVersion()));
             }
             else {
-                return Styles.validate(stream);
+                return Styles.validate(stream, language);
             }
         } 
         catch (IOException e) {
@@ -567,11 +569,13 @@ public class GetMapKvpRequestReader extends KvpRequestReader implements HttpServ
        
         StyledLayerDescriptor sld;
         try {
+            String format = getStyleFormat(getMap);
+
             if (getMap.getSldVersion() != null) {
-                sld = Styles.parse(stream, new Version(getMap.getSldVersion()));
+                sld = Styles.parse(stream, format, new Version(getMap.getSldVersion()));
             }
             else {
-                sld = Styles.parse(stream);
+                sld = Styles.parse(stream, format);
             }
         }
         catch(IOException e) {
@@ -579,6 +583,13 @@ public class GetMapKvpRequestReader extends KvpRequestReader implements HttpServ
         }
        
         return sld;
+    }
+
+    /*
+     * Get style language from request, falling back on SLD as default. 
+     */
+    private String getStyleFormat(GetMapRequest request) {
+        return request.getStyleFormat() != null ? request.getStyleFormat() : SLDHandler.FORMAT;
     }
 
     private void processSld(final GetMapRequest request, final List<?> requestedLayers,
