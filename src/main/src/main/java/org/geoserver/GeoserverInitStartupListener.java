@@ -71,9 +71,7 @@ public class GeoserverInitStartupListener implements ServletContextListener {
         
         
         // make sure we remember if GeoServer controls logging or not
-        String strValue = GeoServerExtensions.getProperty(LoggingUtils.RELINQUISH_LOG4J_CONTROL, 
-                sce.getServletContext());
-        relinquishLoggingControl = Boolean.valueOf(strValue);
+        relinquishLoggingControl = LoggingUtils.relinquishLogControl(sce.getServletContext());
         
         // if the server admin did not set it up otherwise, force X/Y axis
         // ordering

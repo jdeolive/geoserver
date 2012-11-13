@@ -7,7 +7,6 @@ import org.geoserver.config.ConfigurationListenerAdapter;
 import org.geoserver.config.GeoServer;
 import org.geoserver.config.GeoServerInitializer;
 import org.geoserver.config.LoggingInfo;
-import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.platform.GeoServerResourceLoader;
 import org.geotools.util.logging.Logging;
 import org.springframework.beans.BeansException;
@@ -79,9 +78,7 @@ public class LoggingInitializer implements GeoServerInitializer, ApplicationCont
     }
 
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-        String strValue = GeoServerExtensions.getProperty(LoggingUtils.RELINQUISH_LOG4J_CONTROL, 
-                applicationContext);
-        relinquishLoggingControl = Boolean.valueOf(strValue);
+        relinquishLoggingControl = LoggingUtils.relinquishLogControl(applicationContext);
     }
 }
 

@@ -54,10 +54,8 @@ public class LoggingStartupContextListener implements ServletContextListener {
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "Could not configure log4j logging redirection", e);
         }
-        
-        String relinquishLoggingControl = GeoServerExtensions.getProperty(LoggingUtils.RELINQUISH_LOG4J_CONTROL, 
-                context);
-        if(Boolean.valueOf(relinquishLoggingControl)) {
+
+        if(LoggingUtils.relinquishLogControl(context)) {
             getLogger().info("RELINQUISH_LOG4J_CONTROL on, won't attempt to reconfigure LOG4J loggers");
         } else {
             try {

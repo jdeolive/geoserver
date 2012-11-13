@@ -19,6 +19,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.PropertyConfigurator;
 import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.platform.GeoServerResourceLoader;
+import org.springframework.context.ApplicationContext;
 import org.vfny.geoserver.global.ConfigurationException;
 
 public class LoggingUtils {
@@ -42,6 +43,24 @@ public class LoggingUtils {
             }
             return Log4J;
         }
+    }
+
+    /**
+     * Determines if the system property / servelt context param / environment variable is set
+     * that forces GeoServer to give up all logging control.
+     */
+    public static boolean relinquishLogControl(ApplicationContext appContext) {
+        String strValue = GeoServerExtensions.getProperty(RELINQUISH_LOG4J_CONTROL, appContext);
+        return Boolean.valueOf(strValue);
+    }
+
+    /**
+     * Determines if the system property / servelt context param / environment variable is set
+     * that forces GeoServer to give up all logging control.
+     */
+    public static boolean relinquishLogControl(ServletContext servletContext) {
+        String strValue = GeoServerExtensions.getProperty(RELINQUISH_LOG4J_CONTROL, servletContext);
+        return Boolean.valueOf(strValue);
     }
 
     public static void configureGeoServerLogging(GeoServerResourceLoader loader, InputStream loggingConfigStream, boolean suppressStdOutLogging, boolean suppressFileLogging, String logFileName) throws FileNotFoundException, IOException,
