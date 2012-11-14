@@ -137,7 +137,11 @@ public class ResourcePool {
             //fall through
         }
     }
-    
+
+    public Map<String, DataAccess> getDataStoreCache() {
+        return dataStoreCache;
+    }
+
     /**
      * Default number of hard references
      */
