@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE beans PUBLIC "-//SPRING//DTD BEAN//EN" "http://www.springframework.org/dtd/spring-beans.dtd">
+<beans>
+
+  <bean id="jdbcDebugInitializer" class="org.geoserver.jdbcdebug.JDBCDebugInitializer">
+    <constructor-arg ref="dataDirectory"/>
+  </bean>
+
+  <bean id="jdbcDataStoreFactory" class="org.geoserver.jdbcdebug.JDBCDataStoreFactoryInitializer">
+  </bean>
+  
+  <bean id="cxResource" class="org.geoserver.jdbcdebug.rest.ConnectionResource">
+  </bean>
+
+  <bean id="jdbcDebugRESTMapping" class="org.geoserver.rest.RESTMapping">
+    <property name="routes">
+      <map>
+        <entry>
+          <key><value>/connections.{format}</value></key>
+          <value>cxResource</value>
+        </entry>
+      </map>
+    </property>
+  </bean>
+</beans>

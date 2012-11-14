@@ -200,5 +200,11 @@
         <module>script</module>
       </modules>
     </profile>
+    <profile>
+      <id>jdbcdebug</id>
+      <modules>
+        <module>jdbcdebug</module>
+      </modules>
+    </profile>
   </profiles>
 </project>
