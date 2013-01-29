@@ -271,5 +271,11 @@
         <module>wms-eo</module>
       </modules>
     </profile>	
+    <profile>	
+      <id>mbtiles</id>
+      <modules>
+        <module>mbtiles</module>
+      </modules>
+    </profile>
   </profiles>
 </project>

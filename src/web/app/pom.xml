@@ -909,6 +909,16 @@
         </dependency>
       </dependencies>
     </profile>
+    <profile>
+      <id>mbtiles</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.geoserver.community</groupId>
+          <artifactId>mbtiles</artifactId>
+          <version>${project.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
  </profiles>
 
 </project>
