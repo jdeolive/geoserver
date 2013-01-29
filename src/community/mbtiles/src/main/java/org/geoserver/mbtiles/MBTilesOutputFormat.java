@@ -21,10 +21,12 @@ import java.util.logging.Logger;
 import org.apache.commons.io.FileUtils;
 import org.geoserver.gwc.GWC;
 import org.geoserver.ows.util.OwsUtils;
+import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.platform.ServiceException;
 import org.geoserver.wms.GetMapRequest;
 import org.geoserver.wms.MapLayerInfo;
 import org.geoserver.wms.MapProducerCapabilities;
+import org.geoserver.wms.RasterCleaner;
 import org.geoserver.wms.WMS;
 import org.geoserver.wms.WMSMapContent;
 import org.geoserver.wms.WebMap;
@@ -55,6 +57,8 @@ import com.vividsolutions.jts.geom.Envelope;
 
 public class MBTilesOutputFormat extends AbstractMapOutputFormat {
 
+    static Logger LOGGER = Logging.getLogger("org.geoserver.mbtiles");
+
     static final String MIME_TYPE = "application/x-sqlite3";
 
     static final String PNG_MIME_TYPE = "image/png";
@@ -63,8 +67,12 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
 
     static final Set<String> NAMES = Sets.newHashSet("mbtiles");
 
-    static Logger LOGGER = Logging.getLogger("org.geoserver.mbtiles");
-
+    static final int TILE_CLEANUP_INTERVAL;
+    static {
+        //calculate the number of tiles we can generate before having to cleanup, value is
+        //  25% of total memory / approximte size of single tile
+        TILE_CLEANUP_INTERVAL = (int) (Runtime.getRuntime().maxMemory() * 0.25 / (256.0*256*4)); 
+    }
     WebMapService webMapService;
     GWC gwc;
     WMS wms;
@@ -127,6 +135,10 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
         req.setWidth(gridSubset.getTileWidth());
         req.setHeight(gridSubset.getTileHeight());
 
+        //count tiles as we generate them
+        int ntiles = 0;
+
+        //flag determining if tile row indexes we store in database should be inverted 
         boolean flipy = Boolean.valueOf((String)formatOpts.get("flipy"));
         for (int z = minmax[0]; z <= minmax[1]; z++) {
             long[] intersect = gridSubset.getCoverageIntersection(z, bbox);
@@ -143,6 +155,11 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
                         throw new ServiceException("Tile generation failed", e);
                     }
 
+                    //images we encode are actually kept around, we need to clean them up
+                    if (ntiles++ == TILE_CLEANUP_INTERVAL) {
+                        cleanUpImages();
+                        ntiles = 0;
+                    }
                 }
             }
         }
@@ -170,11 +187,7 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
     }
 
     ReferencedEnvelope bounds(WMSMapContent map) {
-        ReferencedEnvelope bnds = map.getMaxBounds();
-        if (bnds.isNull()) {
-            bnds = new ReferencedEnvelope(map.getRequest().getBbox(), map.getCoordinateReferenceSystem());
-        }
-        return bnds;
+        return new ReferencedEnvelope(map.getRequest().getBbox(), map.getCoordinateReferenceSystem());
     }
 
     BoundingBox bbox(WMSMapContent map) {
@@ -195,6 +208,11 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
         }
         bout.flush();
         return bout.toByteArray();
+    }
+
+    void cleanUpImages() {
+        RasterCleaner cleaner = GeoServerExtensions.bean(RasterCleaner.class);
+        cleaner.finished(null);
     }
 
     @Override
@@ -330,7 +348,9 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
             if (e > error) {
                 break;
             }
-
+            else {
+                error = e;
+            }
             i++;
         }
 
@@ -373,7 +393,7 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
     }
 
     public static void main(String[] args) throws Exception {
-        MBTilesDB db = new MBTilesDB(new File("/Users/jdeolive/Downloads/topp-world_boundaries_m.db"));
+        MBTilesDB db = new MBTilesDB(new File("/Users/jdeolive/osm.db"));
         File dir = new File("/Users/jdeolive/tiles");
         dir.mkdirs();
 
