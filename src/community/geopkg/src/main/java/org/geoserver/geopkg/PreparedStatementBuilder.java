@@ -6,6 +6,12 @@ import java.sql.SQLException;
 import java.util.Date;
 import java.util.logging.Level;
 
+/**
+ * Builder class for creating prepared statements.
+ * 
+ * @author Justin Deoliveira, OpenGeo
+ *
+ */
 public class PreparedStatementBuilder {
 
     Connection conn;
@@ -52,6 +58,13 @@ public class PreparedStatementBuilder {
     public PreparedStatementBuilder set(Date d) throws SQLException {
         log(d);
         ps.setDate(pos++, d != null ? new java.sql.Date(d.getTime()) : null);
+        return this;
+    }
+
+    public PreparedStatementBuilder set(byte[] b) throws SQLException {
+        log(b);
+        ps.setBytes(pos++, b);
+        //ps.setBinaryStream(pos++, is);
         return this;
     }
 

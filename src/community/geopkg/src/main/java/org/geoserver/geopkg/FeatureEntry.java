@@ -2,6 +2,13 @@ package org.geoserver.geopkg;
 
 import org.geotools.geometry.jts.Geometries;
 
+/**
+ * Feature entry in a geopackage.
+ * <p>
+ * This class corresponds to the "geometry_columns" table.
+ * </p>
+ * @author Justin Deoliveira, OpenGeo
+ */
 public class FeatureEntry extends Entry {
 
     Geometries geometryType;

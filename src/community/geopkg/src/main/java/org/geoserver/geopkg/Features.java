@@ -10,6 +10,11 @@ import org.geotools.data.simple.SimpleFeatureWriter;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
 
+/**
+ * Feature utility class.
+ * 
+ * @author Justin Deoliveira, OpenGeo
+ */
 public class Features {
 
     public static SimpleFeatureReader simple(final FeatureReader r) {
