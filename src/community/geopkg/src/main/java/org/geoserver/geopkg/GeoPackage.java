@@ -88,6 +88,10 @@ public class GeoPackage {
     static final String GEOPACKAGE_CONTENTS = "geopackage_contents";
 
     static final String RASTER_COLUMNS = "raster_columns";
+    
+    static final String TILE_TABLE_METADATA = "tile_table_metadata";
+    
+    static final String TILE_MATRIX_METADATA = "tile_matrix_metadata";
 
     /**
      * database file
@@ -166,8 +170,10 @@ public class GeoPackage {
      */
     public void init() throws SQLException {
         runSQL("SELECT InitSpatialMetaData();");
-        runScript("create_geopackage_contents.sql");
-        runScript("create_raster_columns.sql");
+        runScript("geopackage_contents.sql");
+        runScript("raster_columns.sql");
+        runScript("tile_table_metadata.sql");
+        runScript("tile_matrix_metadata.sql");
     }
 
     /**
@@ -641,6 +647,170 @@ public class GeoPackage {
         }
     }
 
+
+    //
+    // tile methods
+    //
+    
+    /**
+     * Creates a new tile entry in the geopackage.
+     * 
+     * @param entry The tile entry.
+     */
+    public void create(TileEntry entry) throws IOException {
+        if (entry.getTableName() == null) {
+            throw new IllegalArgumentException("Tile entry must specify table name");
+        }
+        if (entry.getBounds() == null) {
+            throw new IllegalArgumentException("Tile entry must specify bounds");
+        }
+
+        TileEntry e = new TileEntry();
+        e.init(entry);
+
+        if (e.getIdentifier() == null) {
+            e.setIdentifier(entry.getTableName());
+        }
+        if (e.getDescription() == null) {
+            e.setDescription(e.getIdentifier());
+        }
+
+        if (e.getSrid() == null) {
+            try {
+                e.setSrid(findSRID(entry.getBounds()));
+            } catch (Exception ex) {
+                throw new IOException(ex);
+            }
+        }
+
+        if (e.isTimesTwoZoom() == null) {
+            e.setTimesTwoZoom(true);
+        }
+
+        e.setLastChange(new Date());
+        try {
+            Connection cx = connPool.getConnection();
+            //TODO: do all of this in a transaction
+            try {
+                //create the tile_table_metadata entry
+                PreparedStatement st = 
+                    prepare(cx, format("INSERT INTO %s VALUES (?,?)", TILE_TABLE_METADATA))
+                    .set(e.getTableName()).set(e.isTimesTwoZoom()).log(Level.FINE).statement();
+                st.execute();
+                st.close();
+
+                //create the tile_matrix_metadata entries
+                st = prepare(cx, format("INSERT INTO %s VALUES (?,?,?,?,?,?,?,?)", TILE_MATRIX_METADATA))
+                    .statement();
+                for (TileMatrix m : e.getTileMatricies()) {
+                    prepare(st).set(e.getTableName()).set(m.getZoomLevel()).set(m.getMatrixWidth())
+                        .set(m.getMatrixHeight()).set(m.getTileWidth()).set(m.getTileHeight())
+                        .set(m.getXPixelSize()).set(m.getYPixelSize())
+                        .statement().execute();
+                }
+                st.close();
+
+                //create the tile table itself
+                st = cx.prepareStatement(format("CREATE TABLE %s (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    "zoom_level INTEGER NOT NULL DEFAULT 0," +
+                    "tile_column INTEGER NOT NULL DEFAULT 0," +
+                    "tile_row INTEGER NOT NULL DEFAULT 0," +
+                    "tile_data BLOB NOT NULL DEFAULT (zeroblob(4)))", e.getTableName()));
+                st.execute();
+                st.close();
+            }
+            finally {
+                cx.close();
+            }
+        }
+        catch(SQLException ex) {
+            throw new IOException(ex);
+        }
+
+        //update the metadata tables
+        addGeoPackageContentsEntry(e);
+
+        entry.init(e);
+    }
+
+
+    /**
+     * Adds a tile to the geopackage.
+     * 
+     * @param entry The tile metadata entry.
+     * @param tile The tile.
+     */
+    public void add(TileEntry entry, Tile tile) throws IOException {
+        try {
+            Connection cx = connPool.getConnection();
+            try {
+                PreparedStatement ps = prepare(cx, format("INSERT INTO %s (zoom_level, tile_column,"
+                    + " tile_row, tile_data) VALUES (?,?,?,?)", entry.getTableName()))
+                    .set(tile.getZoom()).set(tile.getColumn()).set(tile.getRow()).set(tile.getData())
+                    .log(Level.FINE).statement();
+                ps.execute();
+                ps.close();
+            }
+            finally {
+                cx.close();
+            }
+        }
+        catch(SQLException e) {
+            throw new IOException(e);
+        }
+    }
+
+    public TileReader reader(TileEntry entry, Integer lowZoom, Integer highZoom, 
+        Integer lowCol, Integer highCol, Integer lowRow, Integer highRow) throws IOException  {
+
+        try {
+            List<String> q = new ArrayList();
+            if (lowZoom != null) {
+                q.add("zoom_level > " + lowZoom);
+            }
+            if (highZoom != null) {
+                q.add("zoom_level < " + lowZoom);
+            }
+            if (lowCol != null) {
+                q.add("tile_column < " + lowCol);
+            }
+            if (highCol != null) {
+                q.add("tile_column < " + highCol);
+            }
+            if (lowRow != null) {
+                q.add("tile_row < " + lowRow);
+            }
+            if (highRow != null) {
+                q.add("tile_row < " + highRow);
+            }
+
+            StringBuffer sql = new StringBuffer("SELECT * FROM ").append(entry.getTableName());
+            if (!q.isEmpty()) {
+                sql.append(" WHERE ");
+                for (String s : q) {
+                    sql.append(s).append(" AND ");
+                }
+                sql.setLength(sql.length()-5);
+            }
+
+            Connection cx = connPool.getConnection();
+
+            Statement st = cx.createStatement();
+            ResultSet rs = st.executeQuery(sql.toString());
+
+            return new TileReader(rs, cx);
+
+        }
+        catch(SQLException e) {
+            throw new IOException(e);
+        }
+        
+    }
+
+    Integer findSRID(ReferencedEnvelope e) throws Exception {
+        return CRS.lookupEpsgCode(e.getCoordinateReferenceSystem(), true);
+    }
     //
     //sql utility methods
     //

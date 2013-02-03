@@ -14,7 +14,6 @@ import java.util.logging.Level;
  */
 public class PreparedStatementBuilder {
 
-    Connection conn;
     PreparedStatement ps;
     int pos = 1;
 
@@ -24,9 +23,16 @@ public class PreparedStatementBuilder {
         return new PreparedStatementBuilder(conn, sql); 
     }
 
+    public static PreparedStatementBuilder prepare(PreparedStatement st) throws SQLException {
+        return new PreparedStatementBuilder(st); 
+    }
+    
+    public PreparedStatementBuilder(PreparedStatement ps) throws SQLException {
+        this.ps = ps;
+    }
+
     public PreparedStatementBuilder(Connection conn, String sql) throws SQLException {
-        this.conn = conn;
-        ps = conn.prepareStatement(sql);
+        this(conn.prepareStatement(sql));
 
         log.append(sql);
     }
@@ -52,6 +58,12 @@ public class PreparedStatementBuilder {
     public PreparedStatementBuilder set(String s) throws SQLException {
         log(s);
         ps.setString(pos++, s);
+        return this;
+    }
+
+    public PreparedStatementBuilder set(Boolean b) throws SQLException {
+        log(b);
+        ps.setBoolean(pos++, b);
         return this;
     }
 

@@ -14,6 +14,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.imageio.ImageIO;
 import javax.imageio.stream.ImageInputStream;
@@ -32,6 +34,9 @@ import org.geotools.gce.geotiff.GeoTiffReader;
 import org.geotools.gce.image.WorldImageFormat;
 import org.geotools.gce.image.WorldImageReader;
 import org.geotools.geometry.jts.Geometries;
+import org.geotools.geometry.jts.ReferencedEnvelope;
+import org.geotools.referencing.crs.DefaultGeocentricCRS;
+import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.geotools.TestData;
 import org.junit.After;
 import org.junit.Before;
@@ -156,6 +161,43 @@ public class GeoPackageTest {
         assertNotNull(c);
     }
 
+    @Test
+    public void testCreateTileEntry() throws Exception {
+        TileEntry e = new TileEntry();
+        e.setTableName("foo");
+        e.setBounds(new ReferencedEnvelope(-180,180,-90,90,DefaultGeographicCRS.WGS84));
+        e.getTileMatricies().add(new TileMatrix(0, 1, 1, 256, 256, 0.1, 0.1));
+        e.getTileMatricies().add(new TileMatrix(1, 2, 2, 256, 256, 0.1, 0.1));
+
+        geopkg.create(e);
+        assertTileEntry(e);
+
+        List<Tile> tiles = new ArrayList();
+        tiles.add(new Tile(0,0,0,new byte[]{0}));
+        tiles.add(new Tile(1,0,0,new byte[]{1}));
+        tiles.add(new Tile(1,0,1,new byte[]{2}));
+        tiles.add(new Tile(1,1,0,new byte[]{3}));
+        tiles.add(new Tile(1,1,1,new byte[]{4}));
+
+        for (Tile t : tiles) {
+            geopkg.add(e, t);
+        }
+
+        TileReader r = geopkg.reader(e, null, null, null, null, null, null);
+        assertTiles(tiles, r);
+    }
+
+    void assertTiles(List<Tile> tiles, TileReader r) throws IOException {
+        for (Tile t : tiles) {
+            assertTrue(r.hasNext());
+
+            Tile a = r.next();
+            assertEquals(t, a);
+        }
+        assertFalse(r.hasNext());
+        r.close();
+    }
+
     void assertContentEntry(Entry entry) throws Exception {
         Connection cx = geopkg.getDataSource().getConnection();
         try {
@@ -224,6 +266,39 @@ public class GeoPackageTest {
             assertEquals(entry.getSrid().intValue(), rs.getInt("srid"));
             assertEquals(entry.getGeoRectification().value(), rs.getInt("georectification"));
             assertEquals(entry.getCompressionQualityFactor(), rs.getDouble("compr_qual_factor"), 0.1);
+
+            rs.close();
+            ps.close();
+        }
+        finally {
+            cx.close();
+        }
+    }
+
+    void assertTileEntry(TileEntry entry) throws Exception {
+        assertContentEntry(entry);
+        
+        Connection cx = geopkg.getDataSource().getConnection();
+        try {
+            PreparedStatement ps = 
+                cx.prepareStatement("SELECT * FROM tile_table_metadata WHERE t_table_name = ?");
+            ps.setString(1, entry.getTableName());
+
+            ResultSet rs = ps.executeQuery();
+            assertTrue(rs.next());
+
+            assertEquals(entry.isTimesTwoZoom(), rs.getBoolean("is_times_two_zoom"));
+
+            rs.close();
+            ps.close();
+
+            ps = cx.prepareStatement(
+                "SELECT count(*) from tile_matrix_metadata WHERE t_table_name = ?");
+            ps.setString(1, entry.getTableName());
+            rs = ps.executeQuery();
+
+            rs.next();
+            assertEquals(rs.getInt(1), entry.getTileMatricies().size());
 
             rs.close();
             ps.close();
