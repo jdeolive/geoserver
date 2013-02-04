@@ -187,6 +187,28 @@ public class GeoPackageTest {
         assertTiles(tiles, r);
     }
 
+    @Test
+    public void testListEntries() throws Exception {
+        testCreateFeatureEntry();
+        testCreateRasterEntry();
+        testCreateTileEntry();
+
+        List<FeatureEntry> lf = geopkg.features();
+        assertEquals(1, lf.size());
+        assertEquals("bugsites", lf.get(0).getTableName());
+
+        List<RasterEntry> lr = geopkg.rasters();
+        assertEquals(1, lr.size());
+        assertEquals("world", lr.get(0).getTableName());
+
+        List<TileEntry> lt = geopkg.tiles();
+        assertEquals(1, lt.size());
+        
+        TileEntry te = lt.get(0);
+        assertEquals("foo", te.getTableName());
+        assertEquals(2, te.getTileMatricies().size());
+    }
+
     void assertTiles(List<Tile> tiles, TileReader r) throws IOException {
         for (Tile t : tiles) {
             assertTrue(r.hasNext());

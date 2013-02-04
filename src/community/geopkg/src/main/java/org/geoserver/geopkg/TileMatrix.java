@@ -8,7 +8,9 @@ public class TileMatrix {
     Double xPixelSize;
     Double yPixelSize;
 
-    
+    public TileMatrix() {
+    }
+
     public TileMatrix(Integer zoomLevel, Integer matrixWidth, Integer matrixHeight, 
         Integer tileWidth, Integer tileHeight, Double xPixelSize, Double yPixelSize) {
         super();

@@ -30,6 +30,7 @@ import javax.sql.DataSource;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.geoserver.geopkg.Entry.DataType;
 import org.geoserver.geopkg.RasterEntry.Rectification;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.coverage.grid.io.AbstractGridFormat;
@@ -63,6 +64,7 @@ import org.opengis.feature.type.PropertyDescriptor;
 import org.opengis.filter.Filter;
 import org.opengis.geometry.Envelope;
 import org.opengis.referencing.FactoryException;
+import org.opengis.referencing.NoSuchAuthorityCodeException;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 
 import com.vividsolutions.jts.geom.Geometry;
@@ -87,6 +89,8 @@ public class GeoPackage {
 
     static final String GEOPACKAGE_CONTENTS = "geopackage_contents";
 
+    static final String GEOMETRY_COLUMNS = "geometry_columns";
+    
     static final String RASTER_COLUMNS = "raster_columns";
     
     static final String TILE_TABLE_METADATA = "tile_table_metadata";
@@ -228,7 +232,50 @@ public class GeoPackage {
     //
     // feature methods
     //
-    
+
+    /**
+     * Lists all the feature entries in the geopackage. 
+     *
+     */
+    public List<FeatureEntry> features() throws IOException {
+        try {
+            Connection cx = connPool.getConnection();
+            try {
+                String sql = format(
+                "SELECT a.*, b.f_geometry_column, b.type, b.coord_dimension" +
+                 " FROM %s a, %s b" + 
+                " WHERE a.table_name = b.f_table_name" + 
+                  " AND a.data_type = ?", GEOPACKAGE_CONTENTS, GEOMETRY_COLUMNS);
+                PreparedStatement ps = cx.prepareStatement(sql);
+                ps.setString(1, DataType.Feature.value());
+
+                ResultSet rs = ps.executeQuery();
+
+                List<FeatureEntry> entries = new ArrayList();
+                while(rs.next()) {
+                    FeatureEntry e = new FeatureEntry();
+                    initEntry(e, rs);
+
+                    e.setGeometryColumn(rs.getString("f_geometry_column"));
+                    e.setGeometryType(Geometries.getForName(rs.getString("type")));
+                    e.setCoordDimension(rs.getInt("coord_dimension"));
+
+                    entries.add(e);
+                }
+                rs.close();
+                ps.close();
+
+                return entries;
+            }
+            finally {
+                cx.close();
+            }
+        }
+        catch(SQLException e) {
+            throw new IOException(e);
+        }
+    }
+
     /**
      * Creates a new feature entry in the geopackage.
      * <p>
@@ -455,6 +502,49 @@ public class GeoPackage {
     //
     // raster methods
     //
+
+    /**
+     * Lists all the raster entries in the geopackage. 
+     */
+    public List<RasterEntry> rasters() throws IOException {
+        try {
+            Connection cx = connPool.getConnection();
+            try {
+                String sql = format(
+                "SELECT a.*, b.r_raster_column, b.compr_qual_factor, b.georectification" +
+                 " FROM %s a, %s b" + 
+                " WHERE a.table_name = b.r_table_name" + 
+                  " AND a.data_type = ?", GEOPACKAGE_CONTENTS, RASTER_COLUMNS);
+                PreparedStatement ps = cx.prepareStatement(sql);
+                ps.setString(1, DataType.Raster.value());
+
+                ResultSet rs = ps.executeQuery();
+
+                List<RasterEntry> entries = new ArrayList();
+                while(rs.next()) {
+                    RasterEntry e = new RasterEntry();
+                    initEntry(e, rs);
+
+                    e.setRasterColumn(rs.getString("r_raster_column"));
+                    e.setCompressionQualityFactor(rs.getDouble("compr_qual_factor"));
+                    e.setGeoRectification(Rectification.valueOf(rs.getInt("georectification")));
+
+                    entries.add(e);
+                }
+                rs.close();
+                ps.close();
+
+                return entries;
+            }
+            finally {
+                cx.close();
+            }
+        }
+        catch(SQLException e) {
+            throw new IOException(e);
+        }
+    }
+
     /**
      * Adds a new raster dataset to the geopackage.
      *
@@ -651,7 +741,73 @@ public class GeoPackage {
     //
     // tile methods
     //
-    
+
+    /**
+     * Lists all the tile entries in the geopackage. 
+     */
+    public List<TileEntry> tiles() throws IOException {
+        try {
+            Connection cx = connPool.getConnection();
+            try {
+                String sql = format(
+                "SELECT a.*, b.is_times_two_zoom" +
+                 " FROM %s a, %s b" + 
+                " WHERE a.table_name = b.t_table_name" + 
+                  " AND a.data_type = ?", GEOPACKAGE_CONTENTS, TILE_TABLE_METADATA);
+                LOGGER.fine(sql);
+
+                PreparedStatement ps = cx.prepareStatement(sql);
+                ps.setString(1, DataType.Tile.value());
+
+                PreparedStatement psm = cx.prepareStatement(format(
+                    "SELECT * FROM %s" + 
+                    " WHERE t_table_name = ?", TILE_MATRIX_METADATA));
+
+                ResultSet rs = ps.executeQuery();
+
+                List<TileEntry> entries = new ArrayList();
+                while(rs.next()) {
+                    TileEntry e = new TileEntry();
+                    initEntry(e, rs);
+
+                    e.setTimesTwoZoom(rs.getBoolean("is_times_two_zoom"));
+
+                    //load all the tile matrix entries
+                    psm.setString(1, e.getTableName());
+
+                    ResultSet rsm = psm.executeQuery();
+                    while(rsm.next()) {
+                        TileMatrix m = new TileMatrix();
+                        m.setZoomLevel(rsm.getInt("zoom_level"));
+                        m.setMatrixWidth(rsm.getInt("matrix_width"));
+                        m.setMatrixHeight(rsm.getInt("matrix_height"));
+                        m.setTileWidth(rsm.getInt("tile_width"));
+                        m.setTileHeight(rsm.getInt("tile_height"));
+                        m.setXPixelSize(rsm.getDouble("pixel_x_size"));
+                        m.setYPixelSize(rsm.getDouble("pixel_y_size"));
+
+                        e.getTileMatricies().add(m);
+                    }
+
+                    rsm.close();
+                    psm.close();
+
+                    entries.add(e);
+                }
+                rs.close();
+                ps.close();
+
+                return entries;
+            }
+            finally {
+                cx.close();
+            }
+        }
+        catch(SQLException e) {
+            throw new IOException(e);
+        }
+    }
+
     /**
      * Creates a new tile entry in the geopackage.
      * 
@@ -811,9 +967,32 @@ public class GeoPackage {
     Integer findSRID(ReferencedEnvelope e) throws Exception {
         return CRS.lookupEpsgCode(e.getCoordinateReferenceSystem(), true);
     }
+
     //
     //sql utility methods
     //
+
+    void initEntry(Entry e, ResultSet rs) throws SQLException, IOException {
+        e.setIdentifier(rs.getString("identifier"));
+        e.setDescription(rs.getString("description"));
+        e.setTableName(rs.getString("table_name"));
+        e.setLastChange(rs.getDate("last_change"));
+
+        int srid = rs.getInt("srid"); 
+        e.setSrid(srid);
+
+        CoordinateReferenceSystem crs;
+        try {
+            crs = CRS.decode("EPSG:" + srid);
+        } 
+        catch(Exception ex) {
+            throw new IOException(ex);
+        }
+
+        e.setBounds(new ReferencedEnvelope(rs.getDouble("min_x"), 
+            rs.getDouble("max_x"), rs.getDouble("min_y"), rs.getDouble("max_y"), crs));
+    }
+
     void runSQL(String sql) throws SQLException {
         Connection cx = connPool.getConnection();
         try {

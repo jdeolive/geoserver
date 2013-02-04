@@ -21,6 +21,15 @@ public class RasterEntry extends Entry {
         public int value() {
             return value;
         }
+
+        public static Rectification valueOf(int value) {
+            for (Rectification r : values()) {
+                if (r.value == value) {
+                    return r;
+                }
+            }
+            return null;
+        }
     }
 
     String rasterColumn;
