@@ -105,7 +105,7 @@ public class GeoPackageTest {
         ShapefileDataStore shp = new ShapefileDataStore(setUpShapefile());
 
         FeatureEntry entry = new FeatureEntry();
-        geopkg.add(entry, shp.getFeatureSource());
+        geopkg.add(entry, shp.getFeatureSource(), null);
 
         assertTableExists("bugsites");
 
