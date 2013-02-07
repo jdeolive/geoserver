@@ -15,12 +15,15 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.TimeZone;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -97,6 +100,11 @@ public class GeoPackage {
     
     static final String TILE_MATRIX_METADATA = "tile_matrix_metadata";
 
+    static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-mm-dd'T'HH:MM:ss.SSS'Z'");
+    static {
+        DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("GMT"));
+    }
+    
     /**
      * database file
      */
@@ -536,7 +544,7 @@ public class GeoPackage {
                     .set(e.getDataType().value())
                     .set(e.getIdentifier())
                     .set(e.getDescription())
-                    .set(e.getLastChange())
+                    .set(DATE_FORMAT.format(e.getLastChange()))
                     .set(e.getBounds().getMinX())
                     .set(e.getBounds().getMinY())
                     .set(e.getBounds().getMaxX())
@@ -1122,7 +1130,11 @@ public class GeoPackage {
         e.setIdentifier(rs.getString("identifier"));
         e.setDescription(rs.getString("description"));
         e.setTableName(rs.getString("table_name"));
-        e.setLastChange(rs.getDate("last_change"));
+        try {
+            e.setLastChange(DATE_FORMAT.parse(rs.getString("last_change")));
+        } catch (ParseException ex) {
+            throw new IOException(ex);
+        }
 
         int srid = rs.getInt("srid"); 
         e.setSrid(srid);
