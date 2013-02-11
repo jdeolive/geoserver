@@ -78,7 +78,7 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
     static {
         //calculate the number of tiles we can generate before having to cleanup, value is
         //  25% of total memory / approximte size of single tile
-        TILE_CLEANUP_INTERVAL = (int) (Runtime.getRuntime().maxMemory() * 0.25 / (256.0*256*4)); 
+        TILE_CLEANUP_INTERVAL = (int) (Runtime.getRuntime().maxMemory() * 0.05 / (256.0*256*4)); 
     }
 
     static FilterFactory filterFactory = CommonFactoryFinder.getFilterFactory();
@@ -233,12 +233,14 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
         OwsUtils.copy(map.getRequest(), req, GetMapRequest.class);
         req.setLayers(mapLayers);
 
-        //TODO: support jpeg
-        req.setFormat("image/png");
+        Map formatOpts = map.getRequest().getFormatOptions();
+
+        String imageFormat = formatOpts.containsKey("format") ? 
+                parseFormatFromOpts(formatOpts) : findBestFormat(map);
+
+        req.setFormat(imageFormat);
         req.setWidth(gridSubset.getTileWidth());
         req.setHeight(gridSubset.getTileHeight());
-
-        Map formatOpts = map.getRequest().getFormatOptions();
 
         //count tiles as we generate them
         int ntiles = 0;
@@ -464,6 +466,20 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
             zoom++;
         }
         return zoom;
+    }
+
+    String parseFormatFromOpts(Map formatOpts) {
+        String format = (String) formatOpts.get("format");
+        return format.contains("/") ? format : "image/" + format;
+    }
+
+    String findBestFormat(WMSMapContent map) {
+        //if request is a single coverage layer return jpeg, otherwise use just png
+        List<MapLayerInfo> layers = map.getRequest().getLayers();
+        if (layers.size() == 1 && layers.get(0).getType() == MapLayerInfo.TYPE_RASTER) {
+            return JPEG_MIME_TYPE;
+        }
+        return PNG_MIME_TYPE;
     }
 
     byte[] toBytes(WebMap map) throws IOException {
