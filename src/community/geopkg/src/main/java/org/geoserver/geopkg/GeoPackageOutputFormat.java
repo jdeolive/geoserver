@@ -64,6 +64,9 @@ import com.vividsolutions.jts.geom.Envelope;
 
 public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
 
+    static enum Mode {
+        VECTOR, HYBRID,TILED;
+    }
     static Logger LOGGER = Logging.getLogger("org.geoserver.geopkg");
 
     static final String MIME_TYPE = "application/x-sqlite3";
@@ -115,12 +118,23 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
         //list of layers to render directly and include as tiles
         List<MapLayerInfo> tileLayers = new ArrayList(); 
 
-        if (Boolean.valueOf((String)req.getFormatOptions().get("tiles"))) {
+        //check mode, one of:
+        // vector - render vector layers as feature entries and all else as tiles (default)
+        // hybrid - render vector layers as feature entries, raster layers as raster entries, all
+        //          others as tile entries
+        // tiled - all layers as a single tile set
+        Map formatOpts = req.getFormatOptions();
+        Mode mode = formatOpts.containsKey("mode") 
+            ? Mode.valueOf((String) formatOpts.get("mode")) : Mode.VECTOR;
+
+        if (mode == Mode.TILED) {
+            //tiled mode means render all as map tile layer
             tileLayers.addAll(mapLayers);
         }
         else {
-            //setup the filter for the vector layers
-
+            
+            //hybrid mode, dump as raw vector or raster unless the request specifically asks for a
+            // layer to be rendered as tiles
             for (int i = 0; i < layers.size(); i++) {
                 Layer layer = layers.get(i);
                 MapLayerInfo mapLayer = mapLayers.get(i);
@@ -129,7 +143,12 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
                     addFeatureLayer(geopkg, (FeatureLayer)layer, mapLayer, map);
                 }
                 else if (layer instanceof GridCoverageLayer) {
-                    addCoverageLayer(geopkg, (GridCoverageLayer)layer, mapLayer, map);
+                    if (mode == Mode.HYBRID) {
+                        addCoverageLayer(geopkg, (GridCoverageLayer)layer, mapLayer, map);    
+                    }
+                    else {
+                        tileLayers.add(mapLayer);
+                    }
                 }
                 else {
                     tileLayers.add(mapLayer);
@@ -179,6 +198,8 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
                 bnds.getMaxX(), bnds.getMaxY(), map.getRequest().getSRS());
             filter = filterFactory.and(filter, bboxFilter);
         }
+
+        LOGGER.fine("Creating feature entry" + e.getTableName());
         geopkg.add(e, layer.getSimpleFeatureSource(), filter);
     }
 
@@ -190,6 +211,8 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
 
         //TODO: ensure this is one of the supported formats
         AbstractGridFormat format = mapLayer.getCoverage().getStore().getFormat();
+
+        LOGGER.fine("Creating raster entry" + e.getTableName());
         geopkg.add(e, layer.getCoverage(), format);
     }
 
@@ -200,14 +223,25 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
             return;
         }
 
+        //figure out a name for the file entry
+        String tileEntryName = null;
+        Map formatOpts = map.getRequest().getFormatOptions();
+        if (formatOpts.containsKey("tileset_name")) {
+            tileEntryName = (String) formatOpts.get("tileset_name");
+        }
+        if (tileEntryName == null) {
+            tileEntryName = map.getTitle();
+        }
+
         GridSubset gridSubset = findBestGridSubset(map);
         int[] minmax = findMinMaxZoom(gridSubset, map);
 
         BoundingBox bbox = bbox(map);
 
         TileEntry e = new TileEntry();
-        e.setTableName(map.getTitle());
-        e.setBounds(bounds(map));
+        e.setTableName(tileEntryName);
+        e.setBounds(new ReferencedEnvelope(findTileBounds(gridSubset, bbox, minmax[0]), 
+            map.getCoordinateReferenceSystem()));
         e.setSrid(srid(map));
 
         GridSet gridSet = gridSubset.getGridSet();
@@ -226,14 +260,14 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
             e.getTileMatricies().add(m);
         }
 
+        //figure out the actual bounds of the tiles to be renderered
+        LOGGER.fine("Creating tile entry" + e.getTableName());
         geopkg.create(e);
 
         //create a prototype getmap request
         GetMapRequest req = new GetMapRequest();
         OwsUtils.copy(map.getRequest(), req, GetMapRequest.class);
         req.setLayers(mapLayers);
-
-        Map formatOpts = map.getRequest().getFormatOptions();
 
         String imageFormat = formatOpts.containsKey("format") ? 
                 parseFormatFromOpts(formatOpts) : findBestFormat(map);
@@ -275,6 +309,19 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
         }
     }
 
+    Envelope findTileBounds(GridSubset gridSubset, BoundingBox bbox, int z) {
+
+        long[] i = gridSubset.getCoverageIntersection(z, bbox);
+
+        BoundingBox b1 = gridSubset.boundsFromIndex(new long[]{i[0], i[1],i[4]});
+        BoundingBox b2 = gridSubset.boundsFromIndex(new long[]{i[2], i[3],i[4]});
+        return new Envelope(
+            Math.min(b1.getMinX(), b2.getMinX()),
+            Math.max(b1.getMaxX(), b2.getMaxX()),
+            Math.min(b1.getMinY(), b2.getMinY()),
+            Math.max(b1.getMaxY(), b2.getMaxY()));
+    }
+
     void initEntry(Entry e, Layer layer, MapLayerInfo mapLayer, WMSMapContent map) 
         throws IOException {
 
@@ -283,7 +330,7 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
         e.setTableName(r.getName());
         e.setIdentifier(r.getTitle());
         e.setDescription(r.getDescription());
-        e.setBounds(bounds(layer, map));
+        e.setBounds(bounds(map));
         e.setSrid(srid(map));
     }
 
@@ -396,19 +443,19 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
         Map formatOpts = map.getRequest().getFormatOptions();
 
         Integer minZoom = null;
-        if (formatOpts.containsKey("minZoom")) {
-            minZoom = Integer.parseInt(formatOpts.get("minZoom").toString());
+        if (formatOpts.containsKey("min_zoom")) {
+            minZoom = Integer.parseInt(formatOpts.get("min_zoom").toString());
         }
         if (minZoom == null) {
             minZoom = findClosestZoom(gridSet, map);
         }
 
         Integer maxZoom = null;
-        if (formatOpts.containsKey("maxZoom")) {
-            maxZoom = Integer.parseInt(formatOpts.get("maxZoom").toString());
+        if (formatOpts.containsKey("max_zoom")) {
+            maxZoom = Integer.parseInt(formatOpts.get("max_zoom").toString());
         }
-        else if (formatOpts.containsKey("numZooms")) {
-            maxZoom = minZoom + Integer.parseInt(formatOpts.get("numZooms").toString());
+        else if (formatOpts.containsKey("num_zooms")) {
+            maxZoom = minZoom + Integer.parseInt(formatOpts.get("num_zooms").toString());
         }
 
         if (maxZoom == null) {
