@@ -17,6 +17,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import org.apache.commons.io.FileUtils;
 import org.geoserver.gwc.GWC;
@@ -59,7 +61,8 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
 
     static Logger LOGGER = Logging.getLogger("org.geoserver.mbtiles");
 
-    static final String MIME_TYPE = "application/x-sqlite3";
+    //static final String MIME_TYPE = "application/x-sqlite3";
+    static final String MIME_TYPE = "application/zip";
 
     static final String PNG_MIME_TYPE = "image/png";
 
@@ -70,8 +73,8 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
     static final int TILE_CLEANUP_INTERVAL;
     static {
         //calculate the number of tiles we can generate before having to cleanup, value is
-        //  25% of total memory / approximte size of single tile
-        TILE_CLEANUP_INTERVAL = (int) (Runtime.getRuntime().maxMemory() * 0.25 / (256.0*256*4)); 
+        //  5% of total memory / approximte size of single tile
+        TILE_CLEANUP_INTERVAL = (int) (Runtime.getRuntime().maxMemory() * 0.05 / (256.0*256*4)); 
     }
     WebMapService webMapService;
     GWC gwc;
@@ -119,8 +122,11 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
         metadata.put("format", formatName(format));
 
         BoundingBox bbox = bbox(map);
+
+        //snap the bounds to actual tile bounds and store that in database metardata
+        BoundingBox sbbox = snapBBOX(gridSubset, bbox, minmax[0]);
         metadata.put("bounds", String.format("%f,%f,%f,%f", 
-            bbox.getMinX(), bbox.getMinY(), bbox.getMaxX(), bbox.getMaxY()));
+            sbbox.getMinX(), sbbox.getMinY(), sbbox.getMaxX(), sbbox.getMaxY()));
         metadata.put("srs", map.getRequest().getSRS());
         try {
             db.addMetadata(metadata);
@@ -140,7 +146,7 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
 
         //flag determining if tile row indexes we store in database should be inverted 
         boolean flipy = Boolean.valueOf((String)formatOpts.get("flipy"));
-        for (int z = minmax[0]; z <= minmax[1]; z++) {
+        for (int z = minmax[0]; z < minmax[1]; z++) {
             long[] intersect = gridSubset.getCoverageIntersection(z, bbox);
             for (long x = intersect[0]; x <= intersect[2]; x++) {
                 for (long y = intersect[1]; y <= intersect[3]; y++) {
@@ -172,7 +178,17 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
         RawMap result = new RawMap(map, bin, MIME_TYPE) {
             @Override
             public void writeTo(OutputStream out) throws IOException {
-                super.writeTo(out);
+                String dbFilename = getAttachmentFileName();
+                dbFilename = dbFilename.substring(0, dbFilename.length()-4) + ".db";
+
+                ZipOutputStream zout = new ZipOutputStream(out);
+                zout.putNextEntry(new ZipEntry(dbFilename));
+
+                super.writeTo(zout);
+
+                zout.closeEntry();
+                zout.close();
+                
                 bin.close();
                 try {
                     dbFile.delete();
@@ -182,7 +198,7 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
                 }
             }
         };
-        result.setContentDispositionHeader(map, ".db", true);
+        result.setContentDispositionHeader(map, ".zip", true);
         return result;
     }
 
@@ -299,19 +315,19 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
         Map formatOpts = map.getRequest().getFormatOptions();
 
         Integer minZoom = null;
-        if (formatOpts.containsKey("minZoom")) {
-            minZoom = Integer.parseInt(formatOpts.get("minZoom").toString());
+        if (formatOpts.containsKey("min_zoom")) {
+            minZoom = Integer.parseInt(formatOpts.get("min_zoom").toString());
         }
         if (minZoom == null) {
             minZoom = findClosestZoom(gridSet, map);
         }
 
         Integer maxZoom = null;
-        if (formatOpts.containsKey("maxZoom")) {
-            maxZoom = Integer.parseInt(formatOpts.get("maxZoom").toString());
+        if (formatOpts.containsKey("max_zoom")) {
+            maxZoom = Integer.parseInt(formatOpts.get("max_zoom").toString());
         }
-        else if (formatOpts.containsKey("numZooms")) {
-            maxZoom = minZoom + Integer.parseInt(formatOpts.get("numZooms").toString());
+        else if (formatOpts.containsKey("num_zooms")) {
+            maxZoom = minZoom + Integer.parseInt(formatOpts.get("num_zooms").toString());
         }
 
         if (maxZoom == null) {
@@ -321,7 +337,7 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
 
         if (maxZoom < minZoom) {
             throw new ServiceException(
-                format("maxZoom (%d) can not be less than minZoom (%d)", maxZoom, minZoom));
+                format("max_zoom (%d) can not be less than min_zoom (%d)", maxZoom, minZoom));
         }
 
         //end index
@@ -366,7 +382,7 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
 
         while(ntiles < 256 && zoom < gridSubset.getGridSet().getNumLevels()) {
             long[] intersect = gridSubset.getCoverageIntersection(zoom, bbox);
-            ntiles += (intersect[2]-intersect[0])*(intersect[3]-intersect[1]);
+            ntiles += (intersect[2]-intersect[0]+1)*(intersect[3]-intersect[1]+1);
             zoom++;
         }
         return zoom;
@@ -392,8 +408,21 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
         
     }
 
+    BoundingBox snapBBOX(GridSubset gridSubset, BoundingBox bbox, int z) {
+
+        long[] i = gridSubset.getCoverageIntersection(z, bbox);
+
+        BoundingBox b1 = gridSubset.boundsFromIndex(new long[]{i[0], i[1],i[4]});
+        BoundingBox b2 = gridSubset.boundsFromIndex(new long[]{i[2], i[3],i[4]});
+        return new BoundingBox(
+            Math.min(b1.getMinX(), b2.getMinX()),
+            Math.min(b1.getMinY(), b2.getMinY()),
+            Math.max(b1.getMaxX(), b2.getMaxX()),
+            Math.max(b1.getMaxY(), b2.getMaxY()));
+    }
+
     public static void main(String[] args) throws Exception {
-        MBTilesDB db = new MBTilesDB(new File("/Users/jdeolive/osm.db"));
+        MBTilesDB db = new MBTilesDB(new File("/Users/jdeolive/Downloads/ne-NE1_HR_LC_SR_W_DR.db"));
         File dir = new File("/Users/jdeolive/tiles");
         dir.mkdirs();
 
