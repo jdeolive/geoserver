@@ -6,7 +6,6 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.sql.SQLException;
@@ -53,7 +52,6 @@ import org.geowebcache.grid.SRS;
 import org.geowebcache.layer.TileLayer;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 
-import com.google.common.base.Function;
 import com.google.common.collect.Sets;
 import com.vividsolutions.jts.geom.Envelope;
 
@@ -179,7 +177,7 @@ public class MBTilesOutputFormat extends AbstractMapOutputFormat {
             @Override
             public void writeTo(OutputStream out) throws IOException {
                 String dbFilename = getAttachmentFileName();
-                dbFilename = dbFilename.substring(0, dbFilename.length()-4) + ".db";
+                dbFilename = dbFilename.substring(0, dbFilename.length()-4) + ".mbtiles";
 
                 ZipOutputStream zout = new ZipOutputStream(out);
                 zout.putNextEntry(new ZipEntry(dbFilename));
