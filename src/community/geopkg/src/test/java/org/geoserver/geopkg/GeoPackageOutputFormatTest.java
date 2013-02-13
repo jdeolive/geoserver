@@ -67,7 +67,10 @@ public class GeoPackageOutputFormatTest extends WMSTestSupport {
     @Test
     public void testRasterEntries() throws Exception {
 
-        WebMap map = format.produceMap(createMapContent(WORLD));
+        WMSMapContent mapContent = createMapContent(WORLD);
+        mapContent.getRequest().getFormatOptions().put("mode", "hybrid");
+        
+        WebMap map = format.produceMap(mapContent);
         assertNotNull(map);
 
         GeoPackage geopkg = createGeoPackage(map);
@@ -83,9 +86,9 @@ public class GeoPackageOutputFormatTest extends WMSTestSupport {
         WMSMapContent mapContent = createMapContent(WORLD, LAKES);
         mapContent.getRequest().setBbox(
             new Envelope(-0.17578125, -0.087890625, 0.17578125, 0.087890625));
-        mapContent.getRequest().getFormatOptions().put("tiles", "true");
-        mapContent.getRequest().getFormatOptions().put("minZoom", "10");
-        mapContent.getRequest().getFormatOptions().put("maxZoom", "11");
+        mapContent.getRequest().getFormatOptions().put("mode", "tiled");
+        mapContent.getRequest().getFormatOptions().put("min_zoom", "10");
+        mapContent.getRequest().getFormatOptions().put("max_zoom", "11");
         
         WebMap map = format.produceMap(mapContent);
         GeoPackage geopkg = createGeoPackage(map);
