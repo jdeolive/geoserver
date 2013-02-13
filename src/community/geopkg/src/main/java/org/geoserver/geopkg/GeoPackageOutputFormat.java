@@ -15,6 +15,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import org.geoserver.catalog.ResourceInfo;
 import org.geoserver.gwc.GWC;
@@ -69,7 +71,7 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
     }
     static Logger LOGGER = Logging.getLogger("org.geoserver.geopkg");
 
-    static final String MIME_TYPE = "application/x-sqlite3";
+    static final String MIME_TYPE = "application/zip";
 
     static final String PNG_MIME_TYPE = "image/png";
 
@@ -166,7 +168,16 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
         RawMap result = new RawMap(map, bin, MIME_TYPE) {
             @Override
             public void writeTo(OutputStream out) throws IOException {
-                super.writeTo(out);
+                String dbFilename = getAttachmentFileName();
+                dbFilename = dbFilename.substring(0, dbFilename.length()-4) + ".db";
+
+                ZipOutputStream zout = new ZipOutputStream(out);
+                zout.putNextEntry(new ZipEntry(dbFilename));
+
+                super.writeTo(zout);
+                zout.closeEntry();
+                zout.close();
+
                 bin.close();
                 try {
                     dbFile.delete();
@@ -177,7 +188,7 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
             }
         };
 
-        result.setContentDispositionHeader(map, ".db", true);
+        result.setContentDispositionHeader(map, ".zip", true);
         return result;
     }
 
