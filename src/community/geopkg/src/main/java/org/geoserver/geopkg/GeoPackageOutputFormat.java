@@ -125,7 +125,7 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
         // tiled - all layers as a single tile set
         Map formatOpts = req.getFormatOptions();
         Mode mode = formatOpts.containsKey("mode") 
-            ? Mode.valueOf((String) formatOpts.get("mode")) : Mode.VECTOR;
+            ? Mode.valueOf(((String) formatOpts.get("mode")).toUpperCase()) : Mode.VECTOR;
 
         if (mode == Mode.TILED) {
             //tiled mode means render all as map tile layer
