@@ -43,6 +43,20 @@
    <version>${gt.version}</version>
   </dependency>
   <dependency>
+   <groupId>org.geoserver</groupId>
+   <artifactId>main</artifactId>
+   <version>${project.version}</version>
+   <classifier>tests</classifier>
+   <scope>test</scope>
+  </dependency>
+  <dependency>
+   <groupId>org.geoserver</groupId>
+   <artifactId>wms</artifactId>
+   <version>${project.version}</version>
+   <classifier>tests</classifier>
+   <scope>test</scope>
+  </dependency>
+  <dependency>
    <groupId>org.geotools</groupId>
    <artifactId>gt-sample-data</artifactId>
    <version>${gt.version}</version>
