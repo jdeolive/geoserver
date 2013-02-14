@@ -169,7 +169,7 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
             @Override
             public void writeTo(OutputStream out) throws IOException {
                 String dbFilename = getAttachmentFileName();
-                dbFilename = dbFilename.substring(0, dbFilename.length()-4) + ".db";
+                dbFilename = dbFilename.substring(0, dbFilename.length()-4) + ".geopkg";
 
                 ZipOutputStream zout = new ZipOutputStream(out);
                 zout.putNextEntry(new ZipEntry(dbFilename));
