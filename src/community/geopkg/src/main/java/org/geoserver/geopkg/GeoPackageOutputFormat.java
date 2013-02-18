@@ -251,6 +251,12 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
 
         TileEntry e = new TileEntry();
         e.setTableName(tileEntryName);
+        
+        if (mapLayers.size() == 1) {
+            ResourceInfo r = mapLayers.get(0).getResource();
+            e.setIdentifier(r.getTitle());
+            e.setDescription(r.getAbstract());
+        }
         e.setBounds(new ReferencedEnvelope(findTileBounds(gridSubset, bbox, minmax[0]), 
             map.getCoordinateReferenceSystem()));
         e.setSrid(srid(map));
@@ -340,7 +346,7 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
 
         e.setTableName(r.getName());
         e.setIdentifier(r.getTitle());
-        e.setDescription(r.getDescription());
+        e.setDescription(r.getAbstract());
         e.setBounds(bounds(map));
         e.setSrid(srid(map));
     }
