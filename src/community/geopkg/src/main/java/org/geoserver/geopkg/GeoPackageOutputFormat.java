@@ -9,6 +9,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -255,6 +256,10 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
         }
         if (tileEntryName == null) {
             tileEntryName = map.getTitle();
+        }
+        if (tileEntryName == null && mapLayers.size() == 1) {
+            Iterator<MapLayerInfo> it = mapLayers.iterator();
+            tileEntryName = it.next().getLayerInfo().getName();
         }
 
         GridSubset gridSubset = findBestGridSubset(map);
