@@ -40,6 +40,13 @@ import org.geoserver.wms.map.RenderedImageMapResponse;
 import org.geotools.coverage.grid.io.AbstractGridFormat;
 import org.geotools.factory.CommonFactoryFinder;
 import org.geotools.geometry.jts.ReferencedEnvelope;
+import org.geotools.geopkg.Entry;
+import org.geotools.geopkg.FeatureEntry;
+import org.geotools.geopkg.GeoPackage;
+import org.geotools.geopkg.RasterEntry;
+import org.geotools.geopkg.Tile;
+import org.geotools.geopkg.TileEntry;
+import org.geotools.geopkg.TileMatrix;
 import org.geotools.map.FeatureLayer;
 import org.geotools.map.GridCoverageLayer;
 import org.geotools.map.Layer;
@@ -169,7 +176,13 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
             @Override
             public void writeTo(OutputStream out) throws IOException {
                 String dbFilename = getAttachmentFileName();
-                dbFilename = dbFilename.substring(0, dbFilename.length()-4) + ".geopkg";
+                if (dbFilename != null) {
+                    dbFilename = dbFilename.substring(0, dbFilename.length()-4) + ".geopackage";
+                }
+                else {
+                    //this shouldn't really ever happen, but fallback anyways
+                    dbFilename = "geoserver.geopackage";
+                }
 
                 ZipOutputStream zout = new ZipOutputStream(out);
                 zout.putNextEntry(new ZipEntry(dbFilename));

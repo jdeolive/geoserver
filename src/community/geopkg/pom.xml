@@ -16,16 +16,6 @@
  <packaging>jar</packaging>
  <name>GeoServer GeoPackage Extension</name>
 
- <dependencyManagement>
-   <dependencies>
-    <dependency>
-     <groupId>org.xerial</groupId>
-     <artifactId>sqlite-jdbc-spatialite</artifactId>
-     <version>3.7.3-3.0</version>
-    </dependency>
-   </dependencies>
- </dependencyManagement>
-
  <dependencies>
   <dependency>
    <groupId>org.geoserver</groupId>
@@ -38,8 +28,8 @@
    <version>${project.version}</version>
   </dependency>
   <dependency>
-   <groupId>org.geotools.jdbc</groupId>
-   <artifactId>gt-jdbc-spatialite</artifactId>
+   <groupId>org.geotools</groupId>
+   <artifactId>gt-geopkg</artifactId>
    <version>${gt.version}</version>
   </dependency>
   <dependency>

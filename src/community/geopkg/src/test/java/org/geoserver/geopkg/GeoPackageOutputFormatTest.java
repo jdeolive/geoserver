@@ -4,6 +4,7 @@ import static org.junit.Assert.*;
 import static org.geoserver.data.test.MockData.*;
 
 import java.io.File;
+import java.io.FileFilter;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,6 +15,7 @@ import javax.xml.namespace.QName;
 import org.apache.commons.io.FileUtils;
 import org.geoserver.data.test.MockData;
 import org.geoserver.data.test.SystemTestData;
+import org.geoserver.data.util.IOUtils;
 import org.geoserver.gwc.GWC;
 import org.geoserver.wms.GetMapRequest;
 import org.geoserver.wms.WMSMapContent;
@@ -21,6 +23,11 @@ import org.geoserver.wms.WMSTestSupport;
 import org.geoserver.wms.WebMap;
 import org.geoserver.wms.map.RawMap;
 import org.geotools.data.simple.SimpleFeatureReader;
+import org.geotools.geopkg.FeatureEntry;
+import org.geotools.geopkg.GeoPackage;
+import org.geotools.geopkg.Tile;
+import org.geotools.geopkg.TileEntry;
+import org.geotools.geopkg.TileReader;
 import org.geotools.map.MapContent;
 import org.junit.Before;
 import org.junit.Test;
@@ -104,13 +111,23 @@ public class GeoPackageOutputFormatTest extends WMSTestSupport {
 
         RawMap rawMap = (RawMap) map;
 
-        File f = File.createTempFile("geopkg", "db", new File("target"));
+        File f = File.createTempFile("geopkg", "zip", new File("target"));
         FileOutputStream fout = new FileOutputStream(f);
         rawMap.writeTo(fout);
         fout.flush(); 
         fout.close();
 
-        return new GeoPackage(f);
+        File g = File.createTempFile("geopkg", "db", new File("target"));
+        g.delete();
+        g.mkdir();
+
+        IOUtils.decompress(f, g);
+        return new GeoPackage(g.listFiles(new FileFilter() {
+            @Override
+            public boolean accept(File file) {
+                return file.getName().endsWith(".geopackage");
+            }
+        })[0]);
     }
 
     protected GetMapRequest createGetMapRequest(QName[] layerNames) {
