@@ -110,24 +110,30 @@ public class GeoPackageOutputFormatTest extends WMSTestSupport {
         assertTrue(map instanceof RawMap);
 
         RawMap rawMap = (RawMap) map;
-
-        File f = File.createTempFile("geopkg", "zip", new File("target"));
+        File f = File.createTempFile("geopkg", "geopackage", new File("target"));
         FileOutputStream fout = new FileOutputStream(f);
         rawMap.writeTo(fout);
         fout.flush(); 
         fout.close();
-
-        File g = File.createTempFile("geopkg", "db", new File("target"));
-        g.delete();
-        g.mkdir();
-
-        IOUtils.decompress(f, g);
-        return new GeoPackage(g.listFiles(new FileFilter() {
-            @Override
-            public boolean accept(File file) {
-                return file.getName().endsWith(".geopackage");
-            }
-        })[0]);
+        
+        return new GeoPackage(f);
+//        File f = File.createTempFile("geopkg", "zip", new File("target"));
+//        FileOutputStream fout = new FileOutputStream(f);
+//        rawMap.writeTo(fout);
+//        fout.flush(); 
+//        fout.close();
+//
+//        File g = File.createTempFile("geopkg", "db", new File("target"));
+//        g.delete();
+//        g.mkdir();
+//
+//        IOUtils.decompress(f, g);
+//        return new GeoPackage(g.listFiles(new FileFilter() {
+//            @Override
+//            public boolean accept(File file) {
+//                return file.getName().endsWith(".geopackage");
+//            }
+//        })[0]);
     }
 
     protected GetMapRequest createGetMapRequest(QName[] layerNames) {

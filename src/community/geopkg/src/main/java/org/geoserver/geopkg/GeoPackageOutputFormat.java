@@ -19,6 +19,7 @@ import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import org.apache.commons.io.IOUtils;
 import org.geoserver.catalog.ResourceInfo;
 import org.geoserver.gwc.GWC;
 import org.geoserver.ows.util.OwsUtils;
@@ -79,7 +80,8 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
     }
     static Logger LOGGER = Logging.getLogger("org.geoserver.geopkg");
 
-    static final String MIME_TYPE = "application/zip";
+    static final String MIME_TYPE = "application/x-sqlite3";
+    //static final String MIME_TYPE = "application/zip";
 
     static final String PNG_MIME_TYPE = "image/png";
 
@@ -185,12 +187,17 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
                     dbFilename = "geoserver.geopackage";
                 }
 
-                ZipOutputStream zout = new ZipOutputStream(out);
-                zout.putNextEntry(new ZipEntry(dbFilename));
+                IOUtils.copy(bin, out);
+                out.flush();
+                
 
-                super.writeTo(zout);
-                zout.closeEntry();
-                zout.close();
+//               JD: disabling zip compression for now
+//                ZipOutputStream zout = new ZipOutputStream(out);
+//                zout.putNextEntry(new ZipEntry(dbFilename));
+//
+//                super.writeTo(zout);
+//                zout.closeEntry();
+//                zout.close();
 
                 bin.close();
                 try {
@@ -202,7 +209,7 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
             }
         };
 
-        result.setContentDispositionHeader(map, ".zip", true);
+        result.setContentDispositionHeader(map, ".geopackage", true);
         return result;
     }
 
