@@ -296,8 +296,12 @@ public class GeoPackageOutputFormat extends AbstractMapOutputFormat {
             m.setMatrixHeight((int) g.getNumTilesHigh());
             m.setTileWidth(gridSubset.getTileWidth());
             m.setTileHeight(gridSubset.getTileHeight());
-            m.setXPixelSize(gridSet.getPixelSize());
-            m.setYPixelSize(gridSet.getPixelSize());
+
+            //TODO: not sure about this
+            m.setXPixelSize(g.getResolution());
+            m.setYPixelSize(g.getResolution());
+            //m.setXPixelSize(gridSet.getPixelSize());
+            //m.setYPixelSize(gridSet.getPixelSize());
 
             e.getTileMatricies().add(m);
         }
