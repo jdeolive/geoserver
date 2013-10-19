@@ -219,7 +219,7 @@
   </dependency>
   <dependency>
    <groupId>org.geoserver.security</groupId>
-   <artifactId>sec-cas</artifactId>
+   <artifactId>web-sec-cas</artifactId>
    <version>${project.version}</version>
   </dependency>
   <dependency>
