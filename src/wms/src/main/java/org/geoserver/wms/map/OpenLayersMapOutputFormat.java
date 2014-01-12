@@ -18,11 +18,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.geoserver.ows.LocalLayer;
 import org.geoserver.ows.LocalWorkspace;
 import org.geoserver.ows.URLMangler.URLType;
-import org.geoserver.ows.util.RequestUtils;
 import org.geoserver.ows.util.ResponseUtils;
 import org.geoserver.platform.ServiceException;
 import org.geoserver.wms.GetMapOutputFormat;
@@ -139,16 +140,24 @@ public class OpenLayersMapOutputFormat implements GetMapOutputFormat {
             throws ServiceException, IOException {
         try {
             // create the template
-            Template template = cfg.getTemplate("OpenLayersMapTemplate.ftl");
+            String templateName;
+            boolean useOpenLayers3 = browserSupportsOL3(mapContent);
+            if(useOpenLayers3) {
+                templateName = "OpenLayers3MapTemplate.ftl";
+            } else {
+                templateName = "OpenLayers2MapTemplate.ftl";                
+            }
+            Template template = cfg.getTemplate(templateName);
             HashMap<String, Object> map = new HashMap<String, Object>();
             map.put("context", mapContent);
             map.put("pureCoverage", hasOnlyCoverages(mapContent));
             map.put("styles", styleNames(mapContent));
-            map.put("request", mapContent.getRequest());
-            map.put("yx", String.valueOf(isWms13FlippedCRS(mapContent.getRequest().getCrs())));
+            GetMapRequest request = mapContent.getRequest();
+            map.put("request", request);
+            map.put("yx", String.valueOf(isWms13FlippedCRS(request.getCrs())));
             map.put("maxResolution", new Double(getMaxResolution(mapContent.getRenderingArea())));
 
-            String baseUrl = ResponseUtils.buildURL(mapContent.getRequest().getBaseUrl(), "/", null, URLType.RESOURCE);
+            String baseUrl = ResponseUtils.buildURL(request.getBaseUrl(), "/", null, URLType.RESOURCE);
             map.put("baseUrl", canonicUrl(baseUrl));
 
             // TODO: replace service path with call to buildURL since it does this
@@ -162,8 +171,8 @@ public class OpenLayersMapOutputFormat implements GetMapOutputFormat {
             }
             map.put("servicePath", servicePath);
 
-            map.put("parameters", getLayerParameter(mapContent.getRequest().getRawKvp()));
-            map.put("units", getOLUnits(mapContent.getRequest()));
+            map.put("parameters", getLayerParameter(request.getRawKvp()));
+            map.put("units", useOpenLayers3 ? getOL3Units(request) : getOL2Units(request));
 
             if (mapContent.layers().size() == 1) {
                 map.put("layerName", mapContent.layers().get(0).getTitle());
@@ -178,6 +187,22 @@ public class OpenLayersMapOutputFormat implements GetMapOutputFormat {
             return result;
         } catch (TemplateException e) {
             throw new ServiceException(e);
+        }
+    }
+
+    private boolean browserSupportsOL3(WMSMapContent mc) {
+        String agent = mc.getRequest().getHttpRequestHeader("USER-AGENT");
+        if(agent == null) {
+            // play it safe
+            return false;
+        }
+        
+        Pattern MSIE_PATTERN = Pattern.compile("MSIE (\\d+)\\.");
+        Matcher matcher = MSIE_PATTERN.matcher(agent);
+        if(!matcher.matches()) {
+            return true;
+        } else {
+            return Integer.valueOf(matcher.group(1)) > 8;
         }
     }
 
@@ -228,7 +253,7 @@ public class OpenLayersMapOutputFormat implements GetMapOutputFormat {
      * @param request
      * @return
      */
-    private String getOLUnits(GetMapRequest request) {
+    private String getOL2Units(GetMapRequest request) {
         CoordinateReferenceSystem crs = request.getCrs();
         // first rough approximation, meters for projected CRS, degrees for the
         // others
@@ -250,6 +275,30 @@ public class OpenLayersMapOutputFormat implements GetMapOutputFormat {
                 result = "ft";
             else if ("mi".equals(unit) || "miles".equals(unit))
                 result = "mi";
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Error trying to determine unit of measure", e);
+        }
+        return result;
+    }
+    
+    /**
+     * OL3 does support a very limited set of unit types, we have to try and return one of those,
+     * otherwise the scale won't be shown. 
+     * 
+     * @param request
+     * @return
+     */
+    private String getOL3Units(GetMapRequest request) {
+        CoordinateReferenceSystem crs = request.getCrs();
+        // first rough approximation, meters for projected CRS, degrees for the
+        // others
+        String result = crs instanceof ProjectedCRS ? "ol.proj.Units.METERS" : "ol.proj.Units.DEGREES";
+        try {
+            String unit = crs.getCoordinateSystem().getAxis(0).getUnit().toString();
+            // use the unicode escape sequence for the degree sign so its not
+            // screwed up by different local encodings
+            if ("ft".equals(unit) || "feets".equals(unit))
+                result = "ol.proj.Units.FEET";
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Error trying to determine unit of measure", e);
         }
