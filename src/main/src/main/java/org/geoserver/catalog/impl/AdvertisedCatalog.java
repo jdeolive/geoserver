@@ -176,6 +176,11 @@ public class AdvertisedCatalog extends AbstractFilteredCatalog {
 
     @Override
     protected <T extends CatalogInfo> Filter securityFilter(Class<T> infoType, Filter filter) {
+        if (!isOgcCapabilitiesRequest()) {
+            // no need to filter on non capabilities request
+            return filter;
+        }
+
         if (!ResourceInfo.class.isAssignableFrom(infoType) && 
             !LayerInfo.class.isAssignableFrom(infoType) &&
             !LayerGroupInfo.class.isAssignableFrom(infoType)) 
