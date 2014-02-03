@@ -56,6 +56,7 @@
         iframe {
             width: 100%;
             height: 250px;
+            border: none;
         }
         /* Toolbar styles */
         #toolbar {
@@ -125,8 +126,7 @@
             padding: .2em .2em;
         }
     </style>
-    <script src="http://ol3js.org/en/master/build/ol.js" type="text/javascript"></script>    
-    <!-- <script src="${baseUrl}/openlayers3/ol.js" type="text/javascript"></script> -->
+    <script src="${baseUrl}/openlayers3/ol.js" type="text/javascript"></script>
     <title>OpenLayers map preview</title>
   </head>
   <body>
@@ -219,6 +219,7 @@
     </div>
     <div id="wrapper">
         <div id="location"></div>
+        <div id="scale">
     </div>
     <div id="nodelist">
         <em>Click on the map to get feature info</em>
@@ -246,10 +247,8 @@
         coordinateFormat: ol.coordinate.createStringXY(5),
         undefinedHTML: '&nbsp;'
       });
-      var scaleLineControl = new ol.control.ScaleLine();
       var untiled = new ol.layer.Image({
         source: new ol.source.ImageWMS({
-          getFeatureInfoOptions: {params: {'FEATURE_COUNT': 50}},
           ratio: 1,
           url: '${baseUrl}/${servicePath}',
           params: {'FORMAT': format,
@@ -278,9 +277,9 @@
           units: ${units?js_string}
       });
       var map = new ol.Map({
-        controls: ol.control.defaults().extend([scaleLineControl, mousePositionControl]),
+        controls: ol.control.defaults().extend([mousePositionControl]),
         target: 'map',
-        renderer: ol.RendererHint.DOM,
+        renderer: ol.RendererHint.CANVAS,
         layers: [
           untiled,
           tiled
@@ -289,16 +288,33 @@
            projection: projection
         })
       });
+      map.getView().on('change:resolution', function(evt) {
+        var resolution = evt.target.get('resolution');
+        var units = map.getView().get('projection').getUnits();
+        var dpi = 25.4 / 0.28;
+        var mpu = ol.METERS_PER_UNIT[units];
+        var scale = resolution * mpu * 39.37 * dpi;
+        if (scale >= 9500 && scale <= 950000) {
+          scale = Math.round(scale / 1000) + "K";
+        } else if (scale >= 950000) {
+          scale = Math.round(scale / 1000000) + "M";
+        } else {
+          scale = Math.round(scale);
+        }
+        document.getElementById('scale').innerHTML = "Scale = 1 : " + scale;
+      });
       map.getView().fitExtent(bounds, map.getSize());
       map.on('singleclick', function(evt) {
         document.getElementById('nodelist').innerHTML = "Loading... please wait...";
-        map.getFeatureInfo({
-          layers: [untiled],
-          pixel: evt.getPixel(),
-          success: function(featureInfoByLayer) {
-            document.getElementById('nodelist').innerHTML = featureInfoByLayer.join('');
-          }
-        });
+        var view = map.getView();
+        var viewResolution = view.getResolution();
+        var source = untiled.get('visible') ? untiled.getSource() : tiled.getSource();
+        var url = source.getGetFeatureInfoUrl(
+          evt.coordinate, viewResolution, view.getProjection(),
+          {'INFO_FORMAT': 'text/html', 'FEATURE_COUNT': 50});
+        if (url) {
+          document.getElementById('nodelist').innerHTML = '<iframe seamless src="' + url + '"></iframe>';
+        }
       });
 
       // sets the chosen WMS version
