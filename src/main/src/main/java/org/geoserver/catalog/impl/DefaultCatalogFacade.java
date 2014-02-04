@@ -27,6 +27,7 @@ import org.geoserver.catalog.LayerGroupInfo;
 import org.geoserver.catalog.LayerInfo;
 import org.geoserver.catalog.MapInfo;
 import org.geoserver.catalog.NamespaceInfo;
+import org.geoserver.catalog.PublishedInfo;
 import org.geoserver.catalog.ResourceInfo;
 import org.geoserver.catalog.StoreInfo;
 import org.geoserver.catalog.StyleInfo;
@@ -1143,7 +1144,7 @@ public class DefaultCatalogFacade extends AbstractCatalogFacade implements Catal
 
     public <T extends CatalogInfo> Iterable<T> iterable(final Class<? super T> of,
             final Filter filter, final SortBy[] sortByList) {
-        List<T> all;
+        Iterable<T> all;
 
         T t = null;
         if (NamespaceInfo.class.isAssignableFrom(of)) {
@@ -1162,6 +1163,8 @@ public class DefaultCatalogFacade extends AbstractCatalogFacade implements Catal
             all = (List<T>) getStyles();
         } else if (MapInfo.class.isAssignableFrom(of)) {
             all = (List<T>) getMaps();
+        } else if (PublishedInfo.class.equals(of)) {
+            all = Iterables.concat((List<T>)getLayers(), (List<T>)getLayerGroups());
         } else {
             throw new IllegalArgumentException("Unknown type: " + of);
         }

@@ -14,6 +14,7 @@ import org.geoserver.catalog.LayerGroupInfo;
 import org.geoserver.catalog.LayerInfo;
 import org.geoserver.catalog.MapInfo;
 import org.geoserver.catalog.NamespaceInfo;
+import org.geoserver.catalog.PublishedInfo;
 import org.geoserver.catalog.ResourceInfo;
 import org.geoserver.catalog.StoreInfo;
 import org.geoserver.catalog.StyleInfo;
@@ -180,6 +181,20 @@ public enum ClassMappings {
         public Class getImpl() {
             return LayerGroupInfoImpl.class;
         };
+    },
+    PUBLISHED {
+        @Override
+        public Class getInterface() {
+            return PublishedInfo.class;
+        }
+        @Override
+        public Class getImpl() {
+            return null;
+        }
+        @Override
+        public Class[] concreteInterfaces() {
+         return new Class[]{LayerInfo.class, LayerGroupInfo.class};
+        }
     },
     MAP {
         @Override

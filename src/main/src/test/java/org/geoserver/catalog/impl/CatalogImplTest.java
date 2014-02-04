@@ -43,6 +43,7 @@ import org.geoserver.catalog.MetadataLinkInfo;
 import org.geoserver.catalog.MetadataMap;
 import org.geoserver.catalog.NamespaceInfo;
 import org.geoserver.catalog.Predicates;
+import org.geoserver.catalog.PublishedInfo;
 import org.geoserver.catalog.ResourceInfo;
 import org.geoserver.catalog.StyleInfo;
 import org.geoserver.catalog.WMSLayerInfo;
@@ -2540,6 +2541,26 @@ public class CatalogImplTest {
 
         filter = Predicates.fullTextSearch("geotools");
         assertEquals(newHashSet(l2), asSet(catalog.list(LayerInfo.class, filter)));
+    }
+
+    @Test
+    public void testListPublishedInfos() {
+        addLayerGroup();
+
+        CloseableIterator<PublishedInfo> it = 
+                catalog.list(PublishedInfo.class, Predicates.acceptAll());
+        try {
+            List<PublishedInfo> l = Lists.newArrayList(it);
+            assertEquals(2, l.size());
+
+            assertNotNull(Iterables.find(l, 
+                com.google.common.base.Predicates.instanceOf((LayerInfo.class))));
+            assertNotNull(Iterables.find(l, 
+                com.google.common.base.Predicates.instanceOf(LayerGroupInfo.class)));
+        }
+        finally {
+            it.close();
+        }
     }
 
     private <T> Set<T> asSet(CloseableIterator<T> list) {
