@@ -15,6 +15,7 @@ import org.geoserver.catalog.impl.CatalogImpl;
 import org.geoserver.config.DefaultGeoServerLoader;
 import org.geoserver.config.GeoServer;
 import org.geoserver.config.GeoServerFacade;
+import org.geoserver.config.LoggingInfo;
 import org.geoserver.config.ServiceInfo;
 import org.geoserver.config.impl.GeoServerImpl;
 import org.geoserver.config.util.XStreamPersister;
@@ -22,6 +23,7 @@ import org.geoserver.config.util.XStreamServiceLoader;
 import org.geoserver.jdbcconfig.catalog.JDBCCatalogFacade;
 import org.geoserver.jdbcconfig.internal.ConfigDatabase;
 import org.geoserver.jdbcconfig.internal.JDBCConfigProperties;
+import org.geoserver.logging.LoggingUtils;
 import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.platform.GeoServerResourceLoader;
 import org.geotools.util.logging.Logging;
@@ -116,6 +118,15 @@ public class JDBCGeoServerLoader extends DefaultGeoServerLoader {
         if (geoServer.getLogging() == null) {
             geoServer.setLogging(geoServer.getFactory().createLogging());
         }
+
+        // HACK: fire a logging change to ensure logging config is consisent with the config
+        // in the database
+        LoggingInfo logging = geoServer.getLogging();
+        String loggingLevel = logging.getLevel();
+        String loggingLocation = LoggingUtils.getLogFileLocation(logging.getLocation());
+        Boolean stdOutLogging = logging.isStdOutLogging();
+
+        LoggingUtils.initLogging(resourceLoader, loggingLevel, !stdOutLogging, loggingLocation);
 
         //also ensure we have a service configuration for every service we know about
         final List<XStreamServiceLoader> loaders = 
