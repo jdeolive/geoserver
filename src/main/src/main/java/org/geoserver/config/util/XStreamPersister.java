@@ -46,6 +46,9 @@ import org.geoserver.catalog.PublishedInfo;
 import org.geoserver.catalog.ResourceInfo;
 import org.geoserver.catalog.StoreInfo;
 import org.geoserver.catalog.StyleInfo;
+import org.geoserver.catalog.CoverageView;
+import org.geoserver.catalog.CoverageView.InputCoverageBand;
+import org.geoserver.catalog.CoverageView.CoverageBand;
 import org.geoserver.catalog.WMSLayerInfo;
 import org.geoserver.catalog.WMSStoreInfo;
 import org.geoserver.catalog.WorkspaceInfo;
@@ -285,6 +288,10 @@ public class XStreamPersister {
         // Default implementations
         initImplementationDefaults(xs);
         
+        // ignore unkonwn fields, this should help using data dirs that has new config elements
+        // with older versions of GeoServer
+        xs.ignoreUnknownElements();
+        
         // Aliases
         xs.alias("global", GeoServerInfo.class);
         xs.alias("settings", SettingsInfo.class);
@@ -302,6 +309,8 @@ public class XStreamPersister {
         xs.alias( "coverage", CoverageInfo.class);
         xs.alias( "wmsLayer", WMSLayerInfo.class);
         xs.alias( "coverageDimension", CoverageDimensionInfo.class);
+        xs.alias( "coverageBand", CoverageBand.class);
+        xs.alias( "inputCoverageBand", InputCoverageBand.class);
         xs.alias( "metadataLink", MetadataLinkInfo.class);
         xs.alias( "attribute", AttributeTypeInfo.class );
         xs.alias( "layer", LayerInfo.class);
@@ -313,7 +322,7 @@ public class XStreamPersister {
         xs.aliasField("abstract", ResourceInfoImpl.class, "_abstract" );
         xs.alias("AuthorityURL", AuthorityURLInfo.class);
         xs.alias("Identifier", LayerIdentifierInfo.class);
-        
+
         // GeoServerInfo
         xs.omitField(impl(GeoServerInfo.class), "clientProperties");
         xs.omitField(impl(GeoServerInfo.class), "geoServer");
@@ -429,11 +438,13 @@ public class XStreamPersister {
         xs.registerConverter(new ProxyCollectionConverter( xs.getMapper() ) );
         xs.registerConverter(new VirtualTableConverter());
         xs.registerConverter(new KeywordInfoConverter());
+        xs.registerConverter(new SettingsInfoConverter());
 
-        // register VirtulaTable handling
+        // register Virtual structure handling
         registerBreifMapComplexType("virtualTable", VirtualTable.class);
+        registerBreifMapComplexType("coverageView", CoverageView.class);
         registerBreifMapComplexType("dimensionInfo", DimensionInfoImpl.class);
-        
+
         callback = new Callback();
     }
     
@@ -447,7 +458,6 @@ public class XStreamPersister {
     public void registerBreifMapComplexType(String typeId, Class clazz) {
         forwardBreifMap.put(typeId, clazz);
         backwardBreifMap.put(clazz, typeId);
-        
     }
 
     public XStream getXStream() {
@@ -534,7 +544,7 @@ public class XStreamPersister {
         obj = unwrapProxies( obj );
         xs.toXML(obj, new OutputStreamWriter( out, "UTF-8" ));
     }
-    
+
     /**
      * Unwraps any proxies around the object.
      * <p>
@@ -1670,6 +1680,9 @@ public class XStreamPersister {
             if ( featureType.getAttributes() == null ){
                 featureType.setAttributes(new ArrayList());
             }
+            if ( featureType.getResponseSRS() == null) {
+                featureType.setResponseSRS(new ArrayList());
+            }
             if( featureType.getMetadata() == null) {
                 featureType.setMetadata(new MetadataMap());
             }
@@ -1943,17 +1956,8 @@ public class XStreamPersister {
         public Object unmarshal(HierarchicalStreamReader reader, UnmarshallingContext context) {
             String name = readValue("name", String.class, reader);
             String sql = readValue("sql", String.class, reader);
-            
-            // escapeSql value may be missing from existing definitions.  In this 
-            // case set it to false to prevent changing behaviour
-            boolean escapeSql;
-            try {
-                escapeSql = Boolean.valueOf(readValue("escapeSql", String.class, reader));
-            } catch (IllegalArgumentException e) {
-                escapeSql = false;
-            }
                 
-            VirtualTable vt = new VirtualTable(name, sql, escapeSql);
+            VirtualTable vt = new VirtualTable(name, sql, false);
             List<String> primaryKeys = new ArrayList<String>();
             while(reader.hasMoreChildren()) {
                 reader.moveDown();
@@ -1980,6 +1984,8 @@ public class XStreamPersister {
                     }
                     
                     vt.addParameter(new VirtualTableParameter(pname, defaultValue, validator));
+                } else if(reader.getNodeName().equals("escapeSql")) {
+            		vt.setEscapeSql(Boolean.valueOf(reader.getValue()));
                 }
                 reader.moveUp();
             }
@@ -2075,5 +2081,30 @@ public class XStreamPersister {
             writer.endNode();
         }
 
+    }
+    
+    /**
+     * Converter for SettingsInfo class
+     */
+    class SettingsInfoConverter extends AbstractReflectionConverter {
+        
+        public SettingsInfoConverter() {
+            super(SettingsInfo.class);
+        }
+        
+        public Object doUnmarshal(Object result,
+                HierarchicalStreamReader reader, UnmarshallingContext context) {
+            SettingsInfoImpl obj = (SettingsInfoImpl) super.doUnmarshal(result, reader, context);
+            if(obj.getMetadata() == null){
+                obj.setMetadata(new MetadataMap());
+            }
+            if(obj.getContact() == null){
+                obj.setContact(new ContactInfoImpl());
+            }
+            if(obj.getClientProperties() == null){
+                obj.setClientProperties(new HashMap<Object, Object>());
+            }
+            return obj;
+        }
     }
 }

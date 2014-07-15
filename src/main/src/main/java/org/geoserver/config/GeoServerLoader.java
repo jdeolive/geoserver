@@ -51,8 +51,6 @@ import org.geoserver.platform.GeoServerResourceLoader;
 import org.geotools.util.logging.Logging;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
-import org.springframework.web.context.WebApplicationContext;
-import org.vfny.geoserver.global.GeoserverDataDirectory;
 
 /**
  * Initializes GeoServer configuration and catalog on startup.
@@ -82,7 +80,6 @@ public abstract class GeoServerLoader {
     
     public void setApplicationContext(ApplicationContext applicationContext)
             throws BeansException {
-        GeoserverDataDirectory.init((WebApplicationContext)applicationContext);
     }
     
     public void setXStreamPeristerFactory(XStreamPersisterFactory xpf) {
@@ -152,8 +149,7 @@ public abstract class GeoServerLoader {
                 initer.initialize( geoServer );
             }
             catch( Throwable t ) {
-                //TODO: log this
-                t.printStackTrace();
+                LOGGER.log(Level.SEVERE, "Failed to run initializer " + initer, t);
             }
         }
     }
@@ -498,7 +494,7 @@ public abstract class GeoServerLoader {
                                         LOGGER.warning( "Ignoring coverage directory " + cd.getAbsolutePath() );
                                     }
                                 }
-                            } else {
+                            } else if(!isConfigDirectory(sd)) {
                                 LOGGER.warning( "Ignoring store directory '" + sd.getName() +  "'");
                                 continue;
                             }
@@ -529,6 +525,19 @@ public abstract class GeoServerLoader {
         return catalog;
     }
     
+    /**
+     * Some config directories in GeoServer are used to store workspace specific configurations, 
+     * identify them so that we don't log complaints about their existence
+     *  
+     * @param f
+     * @return
+     */
+    private boolean isConfigDirectory(File dir) {
+        String name = dir.getName();
+        boolean result = "styles".equals(name) || "layergroups".equals(name);
+        return result;
+    }
+
     /**
      * Reads the legacy (1.x) catalog from disk.
      */
@@ -709,8 +718,17 @@ public abstract class GeoServerLoader {
                 LOGGER.info( "Loaded service '" +  s.getId() + "', " + (s.isEnabled()?"enabled":"disabled") );
             }
             catch( Throwable t ) {
-                //TODO: log this
-                t.printStackTrace();
+                if (directory != null) {
+                    LOGGER.log(Level.SEVERE,
+                            "Failed to load the service configuration in directory: " + directory
+                                    + " with loader for " + l.getServiceClass(),
+                            t);
+                } else {
+                    LOGGER.log(
+                            Level.SEVERE,
+                            "Failed to load the root service configuration with loader for "
+                                    + l.getServiceClass(), t);
+                }
             }
         }
     }

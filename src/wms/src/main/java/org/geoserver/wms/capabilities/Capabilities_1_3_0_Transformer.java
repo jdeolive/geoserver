@@ -1,4 +1,4 @@
-/* Copyright (c) 2001 - 2013 OpenPlans - www.openplans.org. All rights reserved.
+/* Copyright (c) 2001 - 2014 OpenPlans - www.openplans.org. All rights reserved.
  * This code is licensed under the GPL 2.0 license, available at the root
  * application directory.
  */
@@ -458,7 +458,7 @@ public class Capabilities_1_3_0_Transformer extends TransformerBase {
                 } else {
                     if (LOGGER.isLoggable(Level.WARNING)) {
                         LOGGER.warning("Map output format "
-                                + format.getMimeType()
+                                + format.getMimeType() + " (" + format.getClass() + ")"
                                 + " does "
                                 + "not include mime type in output format names. Will be excluded from"
                                 + " capabilities document.");
@@ -483,7 +483,7 @@ public class Capabilities_1_3_0_Transformer extends TransformerBase {
 
             start("GetFeatureInfo");
 
-            for (String format : wmsConfig.getAvailableFeatureInfoFormats()) {
+            for (String format : wmsConfig.getAllowedFeatureInfoFormats()) {
                 element("Format", format);
             }
 

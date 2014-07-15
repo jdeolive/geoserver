@@ -1,4 +1,4 @@
-/* Copyright (c) 2001 - 2013 OpenPlans - www.openplans.org. All rights reserved.
+/* Copyright (c) 2001 - 2014 OpenPlans - www.openplans.org. All rights reserved.
  * This code is licensed under the GPL 2.0 license, available at the root
  * application directory.
  */
@@ -492,19 +492,7 @@ public class GetMap {
             }
         }
 
-        // setup some SLD variable substitution environment used by rendering transformations
-        EnvFunction.setLocalValue("wms_bbox", mapContent.getRenderingArea());
-        EnvFunction.setLocalValue("wms_crs", mapContent.getRenderingArea().getCoordinateReferenceSystem());
-        EnvFunction.setLocalValue("wms_srs", mapContent.getRequest().getSRS());
-        EnvFunction.setLocalValue("wms_width", mapContent.getMapWidth());
-        EnvFunction.setLocalValue("wms_height", mapContent.getMapHeight());
-        try {
-            double scaleDenominator = RendererUtilities.calculateOGCScale(mapContent.getRenderingArea(),
-                    mapContent.getMapWidth(), null);
-            EnvFunction.setLocalValue("wms_scale_denominator", scaleDenominator);
-        } catch(Exception e) {
-            LOGGER.log(Level.SEVERE, "Failed to compute the scale denominator, wms_scale_denominator env variable is unset", e);
-        }
+        RenderingVariables.setupEnvironmentVariables(mapContent);
         
         // set the buffer value if the admin has set a specific value for some layers
         // in this map
@@ -737,7 +725,8 @@ public class GetMap {
      * 
      * @throws ServiceException
      *             if no specialization is configured for the output format specified in
-     *             <code>request</code> or if it can't be instantiated
+     *             <code>request</code> or if it can't be instantiated or the format is not
+     *             allowed
      */
     private GetMapOutputFormat getDelegate(final String outputFormat) throws ServiceException {
 
@@ -747,6 +736,9 @@ public class GetMap {
                     + outputFormat + " format", "InvalidFormat");
             e.setCode("InvalidFormat");
             throw e;
+        }
+        if (wms.isAllowedGetMapFormat(producer)==false) {
+            throw wms.unallowedGetMapFormatException(outputFormat);
         }
         return producer;
     }

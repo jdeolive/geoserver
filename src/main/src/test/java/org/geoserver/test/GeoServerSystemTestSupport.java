@@ -78,6 +78,7 @@ import org.geoserver.ows.util.KvpUtils;
 import org.geoserver.ows.util.ResponseUtils;
 import org.geoserver.platform.ContextLoadedEvent;
 import org.geoserver.platform.GeoServerExtensions;
+import org.geoserver.platform.GeoServerExtensionsHelper;
 import org.geoserver.platform.GeoServerResourceLoader;
 import org.geoserver.security.AccessMode;
 import org.geoserver.security.GeoServerRoleService;
@@ -110,7 +111,6 @@ import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.HandlerInterceptor;
-import org.vfny.geoserver.global.GeoserverDataDirectory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -253,11 +253,7 @@ public class GeoServerSystemTestSupport extends GeoServerBaseTestSupport<SystemT
             applicationContext.destroy();
             
             // kill static caches
-            new GeoServerExtensions().setApplicationContext(null);
-    
-            // this cleans up the data directory static loader, if we don't the next test
-            // will keep on running on the current data dir
-            GeoserverDataDirectory.destroy();
+            GeoServerExtensionsHelper.init(null);
         } finally {
             applicationContext = null;
         }
@@ -834,7 +830,7 @@ public class GeoServerSystemTestSupport extends GeoServerBaseTestSupport<SystemT
         request.setQueryString(ResponseUtils.getQueryString(path));
         request.setRemoteAddr("127.0.0.1");
         request.setServletPath(ResponseUtils.makePathAbsolute( ResponseUtils.stripRemainingPath(path)) );
-        request.setPathInfo(ResponseUtils.makePathAbsolute( ResponseUtils.stripBeginningPath( path)));
+        request.setPathInfo(ResponseUtils.makePathAbsolute( ResponseUtils.stripBeginningPath( ResponseUtils.stripQueryString(path))));
         request.setHeader("Host", "localhost:8080");
         
         // deal with authentication
@@ -1855,7 +1851,16 @@ public class GeoServerSystemTestSupport extends GeoServerBaseTestSupport<SystemT
             myBody = body.getBytes();
         }
         
-        public ServletInputStream getInputStream(){
+        
+        
+        @Override
+        public BufferedReader getReader() throws IOException {
+            if (null == myBody)
+                return null;
+            return new BufferedReader(new StringReader(new String(myBody)));
+        }
+        
+        public ServletInputStream getInputStream() {
             return new GeoServerMockServletInputStream(myBody);
         }
     }

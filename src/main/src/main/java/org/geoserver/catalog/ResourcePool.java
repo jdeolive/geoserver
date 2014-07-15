@@ -27,6 +27,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -49,6 +50,11 @@ import org.geoserver.data.util.CoverageStoreUtils;
 import org.geoserver.data.util.CoverageUtils;
 import org.geoserver.feature.retype.RetypingFeatureSource;
 import org.geoserver.platform.GeoServerExtensions;
+import org.geoserver.platform.GeoServerResourceLoader;
+import org.geoserver.platform.resource.Resource;
+import org.geoserver.platform.resource.ResourceListener;
+import org.geoserver.platform.resource.ResourceNotification;
+import org.geoserver.platform.resource.ResourceNotification.Kind;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.coverage.grid.io.AbstractGridFormat;
 import org.geotools.coverage.grid.io.GridCoverage2DReader;
@@ -93,13 +99,10 @@ import org.opengis.feature.type.FeatureType;
 import org.opengis.feature.type.GeometryDescriptor;
 import org.opengis.feature.type.PropertyDescriptor;
 import org.opengis.filter.Filter;
-import org.opengis.referencing.FactoryException;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
-import org.opengis.referencing.operation.MathTransform;
 import org.opengis.referencing.operation.TransformException;
 import org.springframework.context.ApplicationContext;
 import org.vfny.geoserver.global.GeoServerFeatureLocking;
-import org.vfny.geoserver.global.GeoserverDataDirectory;
 import org.vfny.geoserver.util.DataStoreUtils;
 
 /**
@@ -463,7 +466,8 @@ public class ResourcePool {
         }
     
         if ( factory == null && info.getConnectionParameters() != null ) {
-            factory = DataStoreUtils.aquireFactory( getParams( info.getConnectionParameters() , GeoserverDataDirectory.getGeoserverDataDirectory().getCanonicalPath()));    
+            Map<String, Serializable> params = getParams( info.getConnectionParameters(), catalog.getResourceLoader() );
+            factory = DataStoreUtils.aquireFactory( params);    
         }
    
         return factory;
@@ -494,7 +498,7 @@ public class ResourcePool {
                         //call this methdo to execute the hack which recognizes 
                         // urls which are relative to the data directory
                         // TODO: find a better way to do this
-                        connectionParameters = DataStoreUtils.getParams(connectionParameters,null);
+                        connectionParameters = ResourcePool.getParams(connectionParameters, catalog.getResourceLoader() );
                         
                         // obtain the factory
                         DataAccessFactory factory = null;
@@ -589,23 +593,29 @@ public class ResourcePool {
     }
         
     /**
-     * Get Connect params.
+     * Process conneciton parameters into a synchronized map.
      *
      * <p>
      * This is used to smooth any relative path kind of issues for any file
      * URLS or directory. This code should be expanded to deal with any other context
-     * sensitve isses dataStores tend to have.
+     * sensitve isses data stores tend to have.
      * </p>
-     *
-     * @return DOCUMENT ME!
-     *
+     * <ul>
+     * <li>key ends in URL, and value is a string</li>
+     * <li>value is a URL</li>
+     * <li>key is directory, and value is a string</li>
+     * </ul>
+     * 
+     * @return Processed parameters with relative file URLs resolved
+     * @param m
+     * @param baseDir Base directory used to resolve relative file URLs
      * @task REVISIT: cache these?
      */
-    public static Map getParams(Map m, String baseDir) {
-        Map params = Collections.synchronizedMap(new HashMap(m));
-
-        for (Iterator i = params.entrySet().iterator(); i.hasNext();) {
-            Map.Entry entry = (Map.Entry) i.next();
+    public static <K,V> Map<K,V> getParams(Map<K,V> m, GeoServerResourceLoader loader) {
+        @SuppressWarnings("unchecked")
+        Map<K,V> params = Collections.synchronizedMap(new HashMap<K,V>(m));
+        
+        for (Entry<K,V> entry : params.entrySet()) {
             String key = (String) entry.getKey();
             Object value = entry.getValue();
 
@@ -616,23 +626,24 @@ public class ResourcePool {
                 String path = (String) value;
 
                 if (path.startsWith("file:")) {
-                    File fixedPath = GeoserverDataDirectory.findDataFile(path);
-                    entry.setValue(DataUtilities.fileToURL(fixedPath).toExternalForm());
+                    File fixedPath = loader.url(path);
+                    URL url = DataUtilities.fileToURL(fixedPath);
+                    entry.setValue( (V) url.toExternalForm());
                 }
             } else if (value instanceof URL && ((URL) value).getProtocol().equals("file")) {
-                File fixedPath = GeoserverDataDirectory.findDataFile(((URL) value).toString());
-                entry.setValue(DataUtilities.fileToURL(fixedPath));
+                URL url = (URL) value;
+                File fixedPath = loader.url( url.toString() );
+                entry.setValue( (V) DataUtilities.fileToURL(fixedPath));
             } else if ((key != null) && key.equals("directory") && value instanceof String) {
                 String path = (String) value;
                 //if a url is used for a directory (for example property store), convert it to path
                 
                 if (path.startsWith("file:")) {
-                    File fixedPath = GeoserverDataDirectory.findDataFile((String) value);
-                    entry.setValue(fixedPath.toString());            
+                    File fixedPath = loader.url(path);
+                    entry.setValue( (V) fixedPath.toString() );            
                 }
             }
         }
-
         return params;
     }
     
@@ -1210,6 +1221,16 @@ public class ResourcePool {
         }
     }
     
+    public GridCoverageReader getGridCoverageReader(CoverageInfo info, Hints hints) 
+            throws IOException {
+        return getGridCoverageReader(info, (String) null, hints); 
+    }
+
+    public GridCoverageReader getGridCoverageReader(CoverageInfo info, String coverageName, Hints hints) 
+            throws IOException {
+            return getGridCoverageReader(info.getStore(), info, coverageName, hints);
+    }
+
     /**
      * Returns a coverage reader, caching the result.
      *  
@@ -1233,7 +1254,21 @@ public class ResourcePool {
      * @throws IOException Any errors that occur loading the reader.
      */
     @SuppressWarnings("deprecation")
-    public GridCoverageReader getGridCoverageReader(CoverageStoreInfo info, String coverageName, Hints hints) 
+    public GridCoverageReader getGridCoverageReader(CoverageStoreInfo storeInfo, String coverageName, Hints hints) throws IOException {
+        return getGridCoverageReader(storeInfo, (CoverageInfo) null, coverageName, hints);
+    }
+    
+    
+    /**
+     * Returns a coverage reader, caching the result.
+     *  
+     * @param info The coverage metadata.
+     * @param hints Hints to use when loading the coverage, may be <code>null</code>.
+     * 
+     * @throws IOException Any errors that occur loading the reader.
+     */
+    @SuppressWarnings("deprecation")
+    private GridCoverageReader getGridCoverageReader(CoverageStoreInfo info, CoverageInfo coverageInfo, String coverageName, Hints hints) 
         throws IOException {
         
         final AbstractGridFormat gridFormat = info.getFormat();
@@ -1285,7 +1320,9 @@ public class ResourcePool {
                     //
                     // /////////////////////////////////////////////////////////
                     final String url = info.getURL();
-                    final File obj = GeoserverDataDirectory.findDataFile(url);
+                    GeoServerResourceLoader loader = catalog.getResourceLoader();
+                    final File obj = loader.url(url);
+
                     // In case no File is returned, provide the original String url
                     final Object input = obj != null ? obj : url;  
 
@@ -1304,16 +1341,37 @@ public class ResourcePool {
                 }
             }
         }
-        
+
+        if (coverageInfo != null) {
+            MetadataMap metadata = coverageInfo.getMetadata();
+            if (metadata != null && metadata.containsKey(CoverageView.COVERAGE_VIEW)) {
+                CoverageView coverageView = (CoverageView) metadata.get(CoverageView.COVERAGE_VIEW);
+                return CoverageViewReader.wrap((GridCoverage2DReader) reader, coverageView, coverageInfo, hints);
+            }
+        }
+
         // wrap it if we are dealing with a multi-coverage reader
-        if(coverageName != null) {
+        if (coverageName != null) {
             // force the result to work against a single coverage, so that the OGC service portion of
             // GeoServer does not need to be updated to the multicoverage stuff
             // (we might want to introduce a hint later for code that really wants to get the
             // multi-coverage reader)
-            return SingleGridCoverage2DReader.wrap((GridCoverage2DReader) reader, coverageName);
+            return CoverageDimensionCustomizerReader.wrap((GridCoverage2DReader) reader, coverageName, info);
         } else {
+            // In order to deal with Bands customization, we need to get a CoverageInfo.
+            // Therefore we won't wrap the reader into a CoverageDimensionCustomizerReader in case 
+            // we don't have the coverageName and the underlying reader has more than 1 coverage.
+            // Indeed, there are cases (as during first initialization) where a multi-coverage reader is requested
+            // to the resourcePool without specifying the coverageName: No way to get the proper coverageInfo in
+            // that case so returning the simple reader.
+            final int numCoverages = ((GridCoverage2DReader) reader).getGridCoverageCount();
+            if (numCoverages == 1) {
+                return CoverageDimensionCustomizerReader.wrap((GridCoverage2DReader) reader, null, info);
+            }
+            // Avoid dimensions wrapping since we have a multi-coverage reader 
+            // but no coveragename have been specified
             return (GridCoverage2DReader) reader;
+
         }
     }
     
@@ -1332,6 +1390,10 @@ public class ResourcePool {
         
     }
     
+    public GridCoverage getGridCoverage(CoverageInfo info, ReferencedEnvelope env, Hints hints) throws IOException {
+            return getGridCoverage(info, (String) null, env, hints);
+    }
+    
     /**
      * Loads a grid coverage.
      * <p>
@@ -1345,8 +1407,8 @@ public class ResourcePool {
      * @throws IOException Any errors that occur loading the coverage.
      */
     @SuppressWarnings("deprecation")
-    public GridCoverage getGridCoverage( CoverageInfo info, ReferencedEnvelope env, Hints hints) throws IOException {
-        final GridCoverageReader reader = getGridCoverageReader(info.getStore(), hints);
+    public GridCoverage getGridCoverage( CoverageInfo info, String coverageName, ReferencedEnvelope env, Hints hints) throws IOException {
+        final GridCoverageReader reader = getGridCoverageReader(info, coverageName, hints);
         if(reader == null) {
             return null;
         }
@@ -1406,24 +1468,11 @@ public class ResourcePool {
         }
         
         if (!CRS.equalsIgnoreMetadata(sourceCRS, destCRS)) {
-            // get a math transform
-            MathTransform transform;
-			try {
-				transform = CRS.findMathTransform(sourceCRS, destCRS,true);
-			} catch (FactoryException e) {
-				final IOException ioe= new IOException( "unable to determine coverage crs");
-				ioe.initCause(e);
-				throw ioe;
-			}
-        
-            // transform the envelope
-            if (!transform.isIdentity()) {
-                try {
-                    envelope = CRS.transform(transform, envelope);
-                } 
-                catch (TransformException e) {
-                    throw (IOException) new IOException( "error occured transforming envelope").initCause( e );
-                }
+            try {
+                envelope = CRS.transform(envelope, destCRS);
+            } catch (TransformException e) {
+                throw (IOException) new IOException("error occured transforming envelope")
+                        .initCause(e);
             }
         }
         
@@ -1570,43 +1619,46 @@ public class ResourcePool {
     }
     
     /**
-     * Returns a style resource, caching the result.
+     * Returns a style resource, caching the result. Any associated images should
+     * also be unpacked onto the local machine. ResourcePool will watch the style
+     * for changes and invalidate the cache as needed.
      * <p>
      * The resource is loaded by parsing {@link StyleInfo#getFilename()} as an 
-     * SLD.
+     * SLD. The SLD is prepaired for direct use by GeoTools, making use of absolute
+     * file paths where possible.
      * </p>
      * @param info The style metadata.
      * 
      * @throws IOException Any parsing errors.
      */
-    public Style getStyle( StyleInfo info ) throws IOException {
+    public Style getStyle( final StyleInfo info ) throws IOException {
         Style style = styleCache.get( info );
         if ( style == null ) {
             synchronized (styleCache) {
                 style = styleCache.get( info );
                 if ( style == null ) {
-                    
-                    //JD: it is important that we call the SLDParser(File) constructor because
-                    // if not the sourceURL will not be set which will mean it will fail to 
-                    //resolve relative references to online resources
-                    File styleFile = dataDir().findStyleSldFile(info);
-                    if ( styleFile == null ){
-                        throw new IOException( "No such file: " + info.getFilename());
-                    }
-                    
-                    style = Styles.style(Styles.parse(styleFile, null, info.getSLDVersion()));
-                    
-                    //set the name of the style to be the name of hte style metadata
+                    style = dataDir().parsedStyle(info);
+                    // set the name of the style to be the name of the style metadata
                     // remove this when wms works off style info
                     style.setName( info.getName() );
                     styleCache.put( info, style );
+                    
+                    final Resource styleResource = dataDir().style(info);
+                    styleResource.addListener( new ResourceListener() {
+                        @Override
+                        public void changed(ResourceNotification notify) {
+                            styleCache.remove(info);
+                            styleResource.removeListener( this );
+                        }
+                    });
+                    
                 }
             }
         }
         
         return style;
     }
-    
+
     /**
      * Clears a style resource from the cache.
      * 
@@ -1675,20 +1727,42 @@ public class ResourcePool {
     public void writeStyle( StyleInfo style, InputStream in ) throws IOException {
         synchronized ( styleCache ) {
             File styleFile = dataDir().findOrCreateStyleSldFile(style);
-            BufferedOutputStream out = new BufferedOutputStream( new FileOutputStream( styleFile ) );
-            
-            try {
-                IOUtils.copy( in, out );
-                out.flush();
-                
-                clear(style);
-            }
-            finally {
-                out.close();
-            }
+            writeStyle(in, styleFile);
+            clear(style);
         }
     }
-    
+
+	/**
+	 * Safe write on styleFile the passed inputStream
+	 * 
+	 * @param in
+	 *            the new stream to write to styleFile
+	 * @param styleFile
+	 *            file to update
+	 * @throws IOException
+	 */
+	public static void writeStyle(final InputStream in, final File styleFile)
+			throws IOException {
+		final File temporaryFile = File.createTempFile(styleFile.getName(),
+				null, styleFile.getParentFile());
+		BufferedOutputStream out = null;
+		try {
+			out = new BufferedOutputStream(new FileOutputStream(temporaryFile));
+			IOUtils.copy(in, out);
+			out.flush();
+		} finally {
+			out.close();
+		}
+		// move the file
+		try {
+			org.geoserver.data.util.IOUtils.rename(temporaryFile, styleFile);
+		} finally {
+			if (temporaryFile.exists()) {
+				temporaryFile.delete();
+			}
+		}
+	}
+
     /**
      * Deletes a style from the configuration.
      * 

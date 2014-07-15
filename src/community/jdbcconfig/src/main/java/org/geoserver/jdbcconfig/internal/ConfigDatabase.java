@@ -269,7 +269,7 @@ public class ConfigDatabase {
         }
         logStatement(sql, namedParameters);
 
-        Stopwatch sw = new Stopwatch().start();
+        Stopwatch sw = Stopwatch.createStarted();
         List<String> ids = template.queryForList(sql.toString(), namedParameters, String.class);
         sw.stop();
         if (LOGGER.isLoggable(Level.FINE)) {
@@ -291,18 +291,27 @@ public class ConfigDatabase {
             result = new CloseableIteratorAdapter<T>(iterator);
         } else {
             Iterator<T> iterator = lazyTransformed.iterator();
-            if (offset != null) {
-                Iterators.skip(iterator, offset.intValue());
-            }
-            if (limit != null) {
-                iterator = Iterators.limit(iterator, limit.intValue());
-            }
+            // Apply the filter
             result = CloseableIteratorAdapter.filter(iterator, filter);
+            // The offset and limit should not have been applied as part of the query
+            assert(!sqlBuilder.isOffsetLimitApplied());
+            // Apply offset and limits after filtering
+            result = applyOffsetLimit(result, offset, limit);
         }
 
         return result;
     }
 
+    private <T extends Info> CloseableIterator<T> applyOffsetLimit(CloseableIterator<T> iterator, Integer offset, Integer limit){
+        if (offset != null) {
+            Iterators.advance(iterator, offset.intValue());
+        }
+        if (limit != null) {
+            iterator = CloseableIteratorAdapter.limit(iterator, limit.intValue());
+        }
+        return iterator;
+    }
+    
     public <T extends Info> List<T> queryAsList(final Class<T> of, final Filter filter,
             Integer offset, Integer count, SortBy sortOrder) {
 
