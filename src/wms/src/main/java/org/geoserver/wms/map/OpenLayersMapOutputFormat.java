@@ -292,13 +292,13 @@ public class OpenLayersMapOutputFormat implements GetMapOutputFormat {
         CoordinateReferenceSystem crs = request.getCrs();
         // first rough approximation, meters for projected CRS, degrees for the
         // others
-        String result = crs instanceof ProjectedCRS ? "ol.proj.Units.METERS" : "ol.proj.Units.DEGREES";
+        String result = crs instanceof ProjectedCRS ? "m" : "degrees";
         try {
             String unit = crs.getCoordinateSystem().getAxis(0).getUnit().toString();
             // use the unicode escape sequence for the degree sign so its not
             // screwed up by different local encodings
             if ("ft".equals(unit) || "feets".equals(unit))
-                result = "ol.proj.Units.FEET";
+                result = "feet";
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Error trying to determine unit of measure", e);
         }

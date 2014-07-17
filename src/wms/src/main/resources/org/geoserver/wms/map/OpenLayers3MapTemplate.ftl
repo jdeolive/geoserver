@@ -36,7 +36,7 @@
           font-size: 19px;
           font-weight: bold;
           height: 22px;
-          line-height: 22px;
+          line-height: 11px;
           margin: 1px;
           padding: 0;
           text-align: center;
@@ -215,7 +215,7 @@
         </ul>
       </div>
     <div id="map">
-      <div class="ol-toggle-options ol-unselectable"><a title="Toggle options toolbar" onClick="toggleControlPanel()" href="#toggle">O</a></div>
+      <div class="ol-toggle-options ol-unselectable"><a title="Toggle options toolbar" onClick="toggleControlPanel()" href="#toggle">...</a></div>
     </div>
     <div id="wrapper">
         <div id="location"></div>
@@ -274,17 +274,17 @@
       });
       var projection = new ol.proj.Projection({
           code: '${request.SRS?js_string}',
-          units: ${units?js_string}
+          units: '${units?js_string}',
+          axisOrientation: 'neu'
       });
       var map = new ol.Map({
         controls: ol.control.defaults().extend([mousePositionControl]),
         target: 'map',
-        renderer: ol.RendererHint.CANVAS,
         layers: [
           untiled,
           tiled
         ],
-        view: new ol.View2D({
+        view: new ol.View({
            projection: projection
         })
       });
@@ -292,7 +292,7 @@
         var resolution = evt.target.get('resolution');
         var units = map.getView().get('projection').getUnits();
         var dpi = 25.4 / 0.28;
-        var mpu = ol.METERS_PER_UNIT[units];
+        var mpu = ol.proj.METERS_PER_UNIT[units];
         var scale = resolution * mpu * 39.37 * dpi;
         if (scale >= 9500 && scale <= 950000) {
           scale = Math.round(scale / 1000) + "K";
