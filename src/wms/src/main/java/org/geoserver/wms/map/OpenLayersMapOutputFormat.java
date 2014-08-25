@@ -25,6 +25,7 @@ import org.geoserver.ows.LocalLayer;
 import org.geoserver.ows.LocalWorkspace;
 import org.geoserver.ows.URLMangler.URLType;
 import org.geoserver.ows.util.ResponseUtils;
+import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.platform.ServiceException;
 import org.geoserver.wms.GetMapOutputFormat;
 import org.geoserver.wms.GetMapRequest;
@@ -37,6 +38,7 @@ import org.geotools.map.Layer;
 import org.geotools.map.WMSLayer;
 import org.geotools.referencing.CRS;
 import org.geotools.referencing.CRS.AxisOrder;
+import org.geotools.util.Converters;
 import org.geotools.util.logging.Logging;
 import org.opengis.feature.type.FeatureType;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
@@ -59,6 +61,11 @@ public class OpenLayersMapOutputFormat implements GetMapOutputFormat {
      * The mime type for the response header
      */
     public static final String MIME_TYPE = "text/html; subtype=openlayers";
+
+    /**
+     * System property name to toggle OL3 support.
+     */
+    public static final String ENABLE_OL3 = "ENABLE_OL3";
 
     /**
      * The formats accepted in a GetMap request for this producer and stated in getcaps
@@ -141,7 +148,7 @@ public class OpenLayersMapOutputFormat implements GetMapOutputFormat {
         try {
             // create the template
             String templateName;
-            boolean useOpenLayers3 = browserSupportsOL3(mapContent);
+            boolean useOpenLayers3 = isOL3Enabled(mapContent) && browserSupportsOL3(mapContent);
             if(useOpenLayers3) {
                 templateName = "OpenLayers3MapTemplate.ftl";
             } else {
@@ -188,6 +195,20 @@ public class OpenLayersMapOutputFormat implements GetMapOutputFormat {
         } catch (TemplateException e) {
             throw new ServiceException(e);
         }
+    }
+
+    private boolean isOL3Enabled(WMSMapContent mapContent) {
+        GetMapRequest req = mapContent.getRequest();
+
+        // check format options
+        Object enableOL3 = Converters.convert(req.getFormatOptions().get(ENABLE_OL3), Boolean.class);
+        if (enableOL3 == null) {
+            // check system property
+            enableOL3 = GeoServerExtensions.getProperty(ENABLE_OL3);
+        }
+
+        // enable by default
+        return enableOL3 == null || Converters.convert(enableOL3, Boolean.class);
     }
 
     private boolean browserSupportsOL3(WMSMapContent mc) {

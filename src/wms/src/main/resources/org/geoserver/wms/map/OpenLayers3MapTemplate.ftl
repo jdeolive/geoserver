@@ -278,7 +278,9 @@
           axisOrientation: 'neu'
       });
       var map = new ol.Map({
-        controls: ol.control.defaults().extend([mousePositionControl]),
+        controls: ol.control.defaults({
+          attribution: false
+        }).extend([mousePositionControl]),
         target: 'map',
         layers: [
           untiled,
@@ -290,7 +292,7 @@
       });
       map.getView().on('change:resolution', function(evt) {
         var resolution = evt.target.get('resolution');
-        var units = map.getView().get('projection').getUnits();
+        var units = map.getView().getProjection().getUnits();
         var dpi = 25.4 / 0.28;
         var mpu = ol.proj.METERS_PER_UNIT[units];
         var scale = resolution * mpu * 39.37 * dpi;
