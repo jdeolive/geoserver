@@ -467,5 +467,11 @@
         <module>gwc-s3</module>
       </modules>
     </profile>
-  </profiles>   
+    <profile>
+      <id>grass</id>
+      <modules>
+        <module>grass</module>
+      </modules>
+    </profile>
+  </profiles>
 </project>

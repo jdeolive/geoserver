@@ -1,0 +1,7 @@
+{
+  "grass": {
+    "dbase": "/Users/jdeolive/Projects/geoserver/work/grass/data",
+    "exe": "/Applications/GRASS-7.0.app/Contents/MacOS/grass70",
+    "modules": "/Applications/GRASS-7.0.app/Contents/MacOS/bin"
+  }
+}
