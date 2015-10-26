@@ -15,8 +15,11 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintStream;
 import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.Socket;
@@ -32,8 +35,10 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.SwingUtilities;
 import javax.swing.event.MenuEvent;
 import javax.swing.event.MenuListener;
+import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 
 import org.eclipse.jetty.server.Connector;
@@ -167,21 +172,29 @@ public class GeoServerConsole {
         w.setVisible( true );
         
         dd = findDataDirectory();
-        
-        LogManager.getRootLogger().addAppender(new AppenderSkeleton() {
 
-            protected void append(LoggingEvent event) {
-                w.addText( event.getMessage().toString() + "\n" );
+        // redirect stdout/stderr to frame
+        final OutputStream out = new BufferedOutputStream(new OutputStream() {
+            byte[] buf = new byte[1];
+            @Override
+            public void write(int b) throws IOException {
+                buf[0] = (byte) b;
+                write(buf, 0, 1);
             }
 
-            public void close() {
+            @Override
+            public void write(byte[] b, int off, int len) throws IOException {
+                final String content = new String(b, off, len);
+                SwingUtilities.invokeLater(new Runnable() {
+                    public void run() {
+                        w.addText(content);
+                    }
+                }); 
             }
+        }, 100);
 
-            public boolean requiresLayout() {
-                return false;
-            }
-        });
-        
+        System.setOut(new PrintStream(out));
+        System.setErr(new PrintStream(out));
     }
     
     File findDataDirectory()  {
@@ -477,6 +490,20 @@ public class GeoServerConsole {
         }
         
         void addText( String text ) {
+            // only maintain so much of the log
+            if (textArea.getLineCount() > 1000) {
+                int d = textArea.getLineCount() - 1000;
+                for (int i = 0; i < d; i++) {
+                    try {
+                        textArea.replaceRange(null, textArea.getLineStartOffset(0), textArea.getLineEndOffset(0));
+                    } catch (BadLocationException e) {
+                        // this is bad!
+                        e.printStackTrace();
+                    }
+                }
+                
+            }
+
             Document d = textArea.getDocument();
             textArea.insert( text, d.getLength() );
             textArea.select( d.getLength(), d.getLength() );
