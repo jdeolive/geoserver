@@ -1,4 +1,4 @@
-/* (c) 2014 Open Source Geospatial Foundation - all rights reserved
+/* (c) 2014 - 2016 Open Source Geospatial Foundation - all rights reserved
  * (c) 2001 - 2013 OpenPlans
  * This code is licensed under the GPL 2.0 license, available at the root
  * application directory.
@@ -6,7 +6,6 @@
 package org.geoserver.importer;
 
 import static org.apache.commons.io.FilenameUtils.getBaseName;
-import static org.apache.commons.io.FilenameUtils.getExtension;
 
 import java.io.File;
 import java.io.IOException;
@@ -15,10 +14,16 @@ import java.util.List;
 import java.util.logging.Level;
 
 import org.apache.commons.io.FileUtils;
+import com.google.common.base.Function;
+import com.google.common.collect.Lists;
+import org.geoserver.catalog.StyleHandler;
+import org.geoserver.catalog.Styles;
 import org.geotools.referencing.CRS;
 import org.geoserver.importer.job.ProgressMonitor;
 import org.opengis.referencing.FactoryException;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
+
+import javax.annotation.Nullable;
 
 public class SpatialFile extends FileData {
     
@@ -28,6 +33,11 @@ public class SpatialFile extends FileData {
      * .prj file
      */
     File prjFile;
+
+    /**
+     * style file
+     */
+    File styleFile;
 
     /** supplementary files, like indexes, etc...  */
     List<File> suppFiles = new ArrayList<File>();
@@ -50,6 +60,14 @@ public class SpatialFile extends FileData {
         this.prjFile = prjFile;
     }
 
+    public File getStyleFile() {
+        return styleFile;
+    }
+
+    public void setStyleFile(File styleFile) {
+        this.styleFile = styleFile;
+    }
+
     public List<File> getSuppFiles() {
         return suppFiles;
     }
@@ -60,6 +78,9 @@ public class SpatialFile extends FileData {
         if (prjFile != null) {
             all.add(prjFile);
         }
+        if (styleFile != null) {
+            all.add(styleFile);
+        }
         all.addAll(suppFiles);
         return all;
     }
@@ -69,6 +90,15 @@ public class SpatialFile extends FileData {
         //round up all the files with the same name
         suppFiles = new ArrayList();
         prjFile = null;
+        styleFile = null;
+
+        final List<String> styleExtensions = Lists.transform(Styles.handlers(), new Function<StyleHandler, String>() {
+            @Nullable
+            @Override
+            public String apply(@Nullable StyleHandler input) {
+                return input.getFileExtension();
+            }
+        });
 
         // getBaseName only gets the LAST extension so beware for .shp.aux.xml stuff
         final String baseName = getBaseName(file.getName());
@@ -86,11 +116,16 @@ public class SpatialFile extends FileData {
                 continue;
             }
 
-            String ext = f.getName().substring(baseName.length());
+            String ext = f.getName().substring(baseName.length()).toLowerCase();
+
             // once the basename is stripped, extension(s) should be present
             if (ext.charAt(0) == '.') {
                 if (".prj".equalsIgnoreCase(ext)) {
                     prjFile = f;
+                }
+                else if (styleFile == null && styleExtensions.contains(ext.substring(1))) {
+                    // TODO: deal with multiple style files? for now we just grab the first
+                    styleFile = f;
                 }
                 else {
                     suppFiles.add(f);
