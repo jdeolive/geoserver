@@ -438,5 +438,11 @@
         <module>web-resource</module>
       </modules>
     </profile>
+    <profile>
+      <id>xauth</id>
+      <modules>
+        <module>xauth</module>
+      </modules>
+    </profile>
   </profiles>
 </project>
