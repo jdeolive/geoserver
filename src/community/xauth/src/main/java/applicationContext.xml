@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+ Copyright (C) 2016 - Open Source Geospatial Foundation. All rights reserved.
+ This code is licensed under the GPL 2.0 license, available at the root
+ application directory.
+ -->
+<!--  <!DOCTYPE beans PUBLIC "-//SPRING//DTD BEAN//EN" "http://www.springframework.org/dtd/spring-beans.dtd">-->
+
+<beans xmlns="http://www.springframework.org/schema/beans"  
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.springframework.org/schema/beans
+          http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
+  
+    <bean id="xauthProvider" class="org.geoserver.security.xauth.XAuthFilterProvider"/>
+
+    <bean id="xauthPanelInfo" class="org.geoserver.security.xauth.web.XAuthFilterPanelInfo">
+        <property name="id" value="security.xauthFilter" />
+        <property name="shortTitleKey" value="XAuthFitlerPanel.short"/>
+        <property name="titleKey" value="XAuthFitlerPanel.title"/>
+        <property name="descriptionKey" value="XAuthFitlerPanel.description"/>
+    </bean>
+
+</beans>
