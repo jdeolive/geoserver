@@ -185,10 +185,10 @@ public class XAuthFilter extends GeoServerRequestHeaderAuthenticationFilter {
       }
     }
 
-    GeoServerUser user = new GeoServerUser(principal);
-    user.setAuthorities(ImmutableSet.copyOf(header));
-
-    return new RoleCalculator(roleService).calculateRoles(user);
+    SortedSet<GeoServerRole> roles = 
+        new RoleCalculator(roleService).calculateRoles(new GeoServerUser(principal));
+    roles.addAll(header);
+    return roles;
   }
 
   GeoServerRoleService roleService() throws IOException {
