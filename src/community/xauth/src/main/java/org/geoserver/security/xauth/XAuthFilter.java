@@ -14,6 +14,7 @@ import org.geoserver.security.config.PasswordPolicyConfig;
 import org.geoserver.security.config.SecurityNamedServiceConfig;
 import org.geoserver.security.filter.GeoServerRequestHeaderAuthenticationFilter;
 import org.geoserver.security.impl.GeoServerRole;
+import org.geoserver.security.impl.GeoServerRoleConverterImpl;
 import org.geoserver.security.impl.GeoServerUser;
 import org.geoserver.security.impl.GeoServerUserGroup;
 import org.geoserver.security.impl.RoleCalculator;
@@ -28,6 +29,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -50,6 +52,9 @@ public class XAuthFilter extends GeoServerRequestHeaderAuthenticationFilter {
     // set converter manually because even though we use role source == RoleService
     // we still need to pull roles out of the header to synchronize
     setConverter(GeoServerExtensions.bean(GeoServerRoleConverter.class));    
+    if (getConverter() == null) {
+      setConverter(new GeoServerRoleConverterImpl());
+    }
   }
 
   @Override
