@@ -1,0 +1,42 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:wicket="http://wicket.apache.org/">
+<body>
+<wicket:head>
+</wicket:head>
+<wicket:extend>
+    <ul>
+    <li>
+        <label><wicket:message key="principalHeader"></wicket:message></label>
+        <input wicket:id="principalHeaderAttribute" class="field text"/>
+    </li>
+    <li>
+        <label><wicket:message key="rolesHeader"></wicket:message></label>
+        <input wicket:id="rolesHeaderAttribute" class="field text"/>
+    </li>
+    <li>
+        <label><wicket:message key="autoProvisionUsers"></wicket:message></label>
+        <input wicket:id="autoProvisionUsers" type="checkbox"/>
+    </li>
+    <div wicket:id="autoProvisionContainer">
+        <li>
+            <label><wicket:message key="roleService"></wicket:message></label>
+            <select wicket:id="roleServiceName" >
+            </select>
+        </li>
+        <li>
+            <label><wicket:message key="userGroupService"></wicket:message></label>
+            <select wicket:id="userGroupServiceName" >
+            </select>
+        </li>
+        <li wicket:id="groupContainer">
+            <label>Groups</label>
+            <div wicket:id="groups" >
+            </div>
+        </li>
+    </div>
+    </ul>
+</wicket:extend>
+</body>
+</html>
