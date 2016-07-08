@@ -16,22 +16,22 @@
         <input wicket:id="rolesHeaderAttribute" class="field text"/>
     </li>
     <li>
+        <label><wicket:message key="roleService"></wicket:message></label>
+        <select wicket:id="roleServiceName" >
+        </select>
+    </li>
+    <li>
+        <label><wicket:message key="userGroupService"></wicket:message></label>
+        <select wicket:id="userGroupServiceName" >
+        </select>
+    </li>
+    <li>
         <label><wicket:message key="autoProvisionUsers"></wicket:message></label>
         <input wicket:id="autoProvisionUsers" type="checkbox"/>
     </li>
     <div wicket:id="autoProvisionContainer">
-        <li>
-            <label><wicket:message key="roleService"></wicket:message></label>
-            <select wicket:id="roleServiceName" >
-            </select>
-        </li>
-        <li>
-            <label><wicket:message key="userGroupService"></wicket:message></label>
-            <select wicket:id="userGroupServiceName" >
-            </select>
-        </li>
         <li wicket:id="groupContainer">
-            <label>Groups</label>
+            <label>Groups for new users</label>
             <div wicket:id="groups" >
             </div>
         </li>
