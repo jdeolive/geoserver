@@ -1,7 +1,6 @@
 package org.geoserver.security.xauth;
 
 import com.google.common.base.Strings;
-import com.google.common.collect.ImmutableSet;
 import org.apache.commons.lang.RandomStringUtils;
 import org.geoserver.platform.GeoServerExtensions;
 import org.geoserver.security.GeoServerRoleConverter;
@@ -60,24 +59,35 @@ public class XAuthFilter extends GeoServerRequestHeaderAuthenticationFilter {
   @Override
   protected String getPreAuthenticatedPrincipalName(HttpServletRequest request) {
     String username = super.getPreAuthenticatedPrincipalName(request);
-    if (autoProvisionUsers && !Strings.isNullOrEmpty(username)) {
-      // ensure the user exists
+    if (!Strings.isNullOrEmpty(username)) {
+      // look up the user
       try {
         GeoServerUserGroupService ugService = findUserGroupService();
-        GeoServerUser user = ugService.getUserByUsername(username);
-        if (user == null) {
-          // add it
-          if (ugService.canCreateStore()) {
-            user = createNewUser(username, ugService);            
+        if (ugService != null) {
+          GeoServerUser user = ugService.getUserByUsername(username);
+
+          if (user == null) {
+            if (autoProvisionUsers) {
+              // add it
+              if (ugService.canCreateStore()) {
+                user = createNewUser(username, ugService);
+              } else {
+                LOG.warning("Unable to synchronize read-only user group service");
+              }
+            } else {
+              LOG.info("No such user: " + username + ", ignoring");
+              return null;
+            }
           }
-          else {
-            LOG.warning("Unable to synchronize read-only user group service");
-          }
+        }
+        else {
+          LOG.warning("Unable to locate user group service");
         }
       } catch (IOException e) {
         LOG.log(Level.WARNING, "Error getting user group service, unable to synchronize", e);
       }
     }
+    
     return username;
   }
 
@@ -156,7 +166,7 @@ public class XAuthFilter extends GeoServerRequestHeaderAuthenticationFilter {
   @Override
   protected Collection<GeoServerRole> getRolesFromRoleService(HttpServletRequest request, String principal) throws IOException {
     Collection<GeoServerRole> header = super.getRolesFromHttpAttribute(request, principal);
-    GeoServerRoleService roleService = roleService();
+    GeoServerRoleService roleService = findRoleService();
 
     if (autoProvisionUsers) {
       Collection<GeoServerRole> service = super.getRolesFromRoleService(request, principal);
@@ -191,7 +201,7 @@ public class XAuthFilter extends GeoServerRequestHeaderAuthenticationFilter {
     return roles;
   }
 
-  GeoServerRoleService roleService() throws IOException {
+  GeoServerRoleService findRoleService() throws IOException {
     // TODO: copied from parent, factor out upstream into callablae method
     boolean useActiveService = getRoleServiceName()==null ||
         getRoleServiceName().trim().length()==0;

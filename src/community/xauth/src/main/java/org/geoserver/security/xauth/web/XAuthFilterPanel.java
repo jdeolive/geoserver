@@ -32,6 +32,15 @@ public class XAuthFilterPanel extends AuthenticationFilterPanel<XAuthFilterConfi
 
     add(new TextField("principalHeaderAttribute").setRequired(true));
     add(new TextField("rolesHeaderAttribute").setRequired(true));
+
+    add(new UserGroupServiceChoice("userGroupServiceName").add(new AjaxFormComponentUpdatingBehavior("change") {
+      @Override
+      protected void onUpdate(AjaxRequestTarget target) {
+        updateGroupList(getFormComponent().getDefaultModelObjectAsString(), model, target);
+      }
+    }));
+    add(new RoleServiceChoice("roleServiceName"));
+
     add(new AjaxCheckBox("autoProvisionUsers") {
       @Override
       protected void onUpdate(AjaxRequestTarget target) {
@@ -45,14 +54,6 @@ public class XAuthFilterPanel extends AuthenticationFilterPanel<XAuthFilterConfi
     autoProvisionContainer.setOutputMarkupId(true);
     autoProvisionContainer.setOutputMarkupPlaceholderTag(true);
     autoProvisionContainer.setVisible(model.getObject().isAutoProvisionUsers());
-
-    autoProvisionContainer.add(new UserGroupServiceChoice("userGroupServiceName").add(new AjaxFormComponentUpdatingBehavior("change") {
-      @Override
-      protected void onUpdate(AjaxRequestTarget target) {
-        updateGroupList(getFormComponent().getDefaultModelObjectAsString(), model, target);
-      }
-    }));
-    autoProvisionContainer.add(new RoleServiceChoice("roleServiceName"));
 
     groupContainer = new WebMarkupContainer("groupContainer");
     autoProvisionContainer.add(groupContainer);
