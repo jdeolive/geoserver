@@ -177,6 +177,15 @@ public class XAuthFilter extends GeoServerRequestHeaderAuthenticationFilter {
         if (roleService.canCreateStore()) {
           synchronized (this) {
             GeoServerRoleStore store = roleService.createStore();
+
+            // first add the role if it doesn't exist
+            for (GeoServerRole r : header) {
+              GeoServerRole existing = roleService.getRoleByName(r.getAuthority());
+              if (existing == null) {
+                store.addRole(r); 
+              }
+            }
+            
             for (GeoServerRole r : compare.remove()) {
               store.disAssociateRoleFromUser(r, principal);
             }
