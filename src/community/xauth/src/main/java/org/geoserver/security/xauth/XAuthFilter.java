@@ -267,4 +267,9 @@ public class XAuthFilter extends GeoServerRequestHeaderAuthenticationFilter {
       return o1.getAuthority().compareTo(o2.getAuthority());
     }
   }
+
+  @Override
+  public String getCacheKey(HttpServletRequest request) {
+    return null;
+  }
 }
