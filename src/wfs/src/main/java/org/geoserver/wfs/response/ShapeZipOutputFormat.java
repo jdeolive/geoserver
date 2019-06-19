@@ -27,6 +27,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.SimpleTimeZone;
 import java.util.logging.Logger;
@@ -213,6 +214,12 @@ public class ShapeZipOutputFormat extends WFSGetFeatureOutputFormat
         dumper.setMaxDbfSize(maxDbfSize);
         dumper.setMaxShpSize(maxShpSize);
         dumper.setCharset(charset);
+
+        // format option to enable datetime handling
+        Optional.ofNullable(request.getFormatOptions().get("DATETIME"))
+            .map(Object::toString)
+            .map(Boolean::parseBoolean)
+            .ifPresent(dumper::setCreateWithDateTime);
 
         // target charset
 
